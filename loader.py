@@ -1,12 +1,13 @@
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 
 from sklearn.preprocessing import StandardScaler
 import csv
 
 INPUT_SIZE = 1
-NUM_STEPS = 30 #  DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 10  # PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 100 #  DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 15  # PREDICITNG LEAD_TIME DAYS AHEAD
 TRAIN_TEST_RATIO = 0.09
 TRAIN_VALIDATION_RATIO = 0.12
 
@@ -97,7 +98,8 @@ def train_test_split(X , y):
 def process():
     rainfall = read_rainfall()
     #print("Rainfall" , rainfall[0:124])
-
+    plt.plot(rainfall)
+    plt.show()
     X,y = split_data(rainfall)
     """
     print(X[0])

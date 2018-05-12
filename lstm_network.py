@@ -4,6 +4,8 @@ import numpy as np
 import random
 import loader as l
 
+
+
 BATCH_SIZE = 20 #BATCH GRADIENT DESCENT FOR TRAINING
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
@@ -15,9 +17,12 @@ def generate_batches(batch_size , X_train , Y_train):
     if batch_size * num_batches < len(X_train):
         num_batches += 1
 
-    batch_indices = range(num_batches)
-    random.shuffle(batch_indices)
 
+    batch_indices = range(num_batches)
+    random.seed(7)
+    random.shuffle(batch_indices)
+    print("batch_indices" , batch_indices)
+    print("\n\n\n")
     batches_X = []
     batches_Y = []
 
@@ -33,12 +38,12 @@ def generate_batches(batch_size , X_train , Y_train):
 class RNNConfig():
 
     input_size=1
-    num_steps=30
+    num_steps=100
     lstm_size=512
     num_layers=2
-    keep_prob=0.8
-    batch_size = 20
-    init_learning_rate = 0.001
+    keep_prob=0.75
+    batch_size = 50
+    init_learning_rate = 0.01
     learning_rate_decay = 0.99
     init_epoch = 5
     max_epoch = 50
@@ -123,7 +128,7 @@ def train():
             config.learning_rate_decay ** max(float(i + 1 - config.init_epoch), 0.0)
         ) for i in range(config.max_epoch)]
 
-        i = 0
+
         for epoch_step in range(config.max_epoch):
             current_lr = learning_rates[epoch_step]
             total_loss = 0
@@ -143,11 +148,11 @@ def train():
                 print(train_loss )
                 j+=1
 
-            print("Epoch" + str(i) +   "completed\n")
+            print("Epoch" + "completed\n")
             average_loss = total_loss/j
             print("Average loss for this epoch is " + str(average_loss))
             print("\n\n\n\n\n")
-            i+=1
+
         saver = tf.train.Saver()
         saver.save(sess, 'saved_networks/' , global_step = epoch_step)
 
