@@ -38,15 +38,15 @@ def generate_batches(batch_size , X_train , Y_train):
 class RNNConfig():
 
     input_size=1
-    num_steps=100
-    lstm_size=512
+    num_steps=40
+    lstm_size=256
     num_layers=2
-    keep_prob=0.75
+    keep_prob=0.8
     batch_size = 50
     init_learning_rate = 0.01
     learning_rate_decay = 0.99
     init_epoch = 5
-    max_epoch = 50
+    max_epoch = 500
 
 config = RNNConfig()
 
@@ -129,6 +129,7 @@ def train():
         ) for i in range(config.max_epoch)]
 
 
+        predictions = []
         for epoch_step in range(config.max_epoch):
             current_lr = learning_rates[epoch_step]
             total_loss = 0
@@ -143,9 +144,11 @@ def train():
                     learning_rate: current_lr
                 }
                 #print(batch_X , batch_y)
+
                 train_loss, _ = sess.run([loss, minimize], train_data_feed)
                 total_loss+=train_loss
-                print(train_loss )
+                #print(train_loss)
+
                 j+=1
 
             print("Epoch" + "completed\n")
@@ -156,10 +159,30 @@ def train():
         saver = tf.train.Saver()
         saver.save(sess, 'saved_networks/' , global_step = epoch_step)
 
+        batches_X , batches_y = generate_batches(BATCH_SIZE , X_validation , y_validation)
+        validation_loss = 0
+        for batch_X, batch_y in zip(batches_X, batches_y):
+            validation_data_feed = {
+                inputs: batch_X,
+                targets: batch_y,
+                learning_rate: current_lr
+            }
 
+            p = sess.run(prediction , validation_data_feed)
+            l = sess.run(loss , validation_data_feed)
+            validation_loss +=l
+
+        print(validation_loss)
+
+def test(sess , saver):
+    checkpoint = tf.train.get_checkpoint_state("saved_networks")
+
+    if checkpoint and checkpoint.model_checkpoint_path:
+        saver.restore(sess, checkpoint.model_checkpoint_path)
+        print("Loaded :", checkpoint.model_checkpoint_path)
 
 if __name__== "__main__":
     train()
     print(X_test.shape)
     print(y_test.shape)
-    test(X_test , y_test)
+    #test(X_test , y_test)
