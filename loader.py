@@ -43,7 +43,7 @@ def read_csv_file(filename):
 
 
 def read_rainfall():
-    data = read_csv_file('daily_rainfall_central_India_1948_2014.csv')
+    data = read_csv_file('normalized_daily_rainfall_central_India_1948_2014.csv')
     rainfall = []
 
     """Creating list of rainfall data"""
@@ -69,7 +69,7 @@ def split_data(input):
        for i in range(len(input) // INPUT_SIZE)]
 
     #Normalizing seq
-    seq = normalize_seq(seq)
+    #seq = normalize_seq(seq)
 
     """Split into groups of num_steps"""
     X = np.array([seq[i: i + NUM_STEPS] for i in range(len(seq) - NUM_STEPS - LEAD_TIME)])

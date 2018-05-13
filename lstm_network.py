@@ -10,7 +10,7 @@ BATCH_SIZE = 20 #BATCH GRADIENT DESCENT FOR TRAINING
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
 
-def generate_batches(batch_size , X_train , Y_train):
+def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
     num_batches = int(len(X_train)) // batch_size
 
@@ -19,10 +19,10 @@ def generate_batches(batch_size , X_train , Y_train):
 
 
     batch_indices = range(num_batches)
-    random.seed(7)
-    random.shuffle(batch_indices)
-    print("batch_indices" , batch_indices)
-    print("\n\n\n")
+
+    if not validation_phase:
+        random.shuffle(batch_indices)
+    #print("batch_indices" , batch_indices)
     batches_X = []
     batches_Y = []
 
@@ -46,7 +46,7 @@ class RNNConfig():
     init_learning_rate = 0.01
     learning_rate_decay = 0.99
     init_epoch = 5
-    max_epoch = 500
+    max_epoch = 2000
 
 config = RNNConfig()
 
@@ -113,76 +113,72 @@ def compute_loss(prediction , targets , learning_rate):
 
     return loss , optimizer , minimize
 
-def train():
+def train(inputs , targets , learning_rate , sess):
 
-
-    inputs , targets , learning_rate = create_placeholders()
     prediction = compute_output(inputs)
     loss , optimizer , minimize = compute_loss(prediction , targets , learning_rate)
 
-    with tf.Session() as sess:
+    saver = tf.train.Saver()
+    init = tf.global_variables_initializer()
+    sess.run(init)
 
-        tf.global_variables_initializer().run()
-        learning_rates = [
-        config.init_learning_rate * (
-            config.learning_rate_decay ** max(float(i + 1 - config.init_epoch), 0.0)
-        ) for i in range(config.max_epoch)]
-
-
-        predictions = []
-        for epoch_step in range(config.max_epoch):
-            current_lr = learning_rates[epoch_step]
-            total_loss = 0
-            j = 0
-            batches_X , batches_y = generate_batches(BATCH_SIZE , X_train , y_train)
-
-
-            for batch_X, batch_y in zip(batches_X, batches_y):
-                train_data_feed = {
-                    inputs: batch_X,
-                    targets: batch_y,
-                    learning_rate: current_lr
-                }
-                #print(batch_X , batch_y)
-
-                train_loss, _ = sess.run([loss, minimize], train_data_feed)
-                total_loss+=train_loss
-                #print(train_loss)
-
-                j+=1
-
-            print("Epoch" + "completed\n")
-            average_loss = total_loss/j
-            print("Average loss for this epoch is " + str(average_loss))
-            print("\n\n\n\n\n")
-
-        saver = tf.train.Saver()
-        saver.save(sess, 'saved_networks/' , global_step = epoch_step)
-
-        batches_X , batches_y = generate_batches(BATCH_SIZE , X_validation , y_validation)
-        validation_loss = 0
-        for batch_X, batch_y in zip(batches_X, batches_y):
-            validation_data_feed = {
-                inputs: batch_X,
-                targets: batch_y,
-                learning_rate: current_lr
-            }
-
-            p = sess.run(prediction , validation_data_feed)
-            l = sess.run(loss , validation_data_feed)
-            validation_loss +=l
-
-        print(validation_loss)
-
-def test(sess , saver):
     checkpoint = tf.train.get_checkpoint_state("saved_networks")
 
     if checkpoint and checkpoint.model_checkpoint_path:
         saver.restore(sess, checkpoint.model_checkpoint_path)
         print("Loaded :", checkpoint.model_checkpoint_path)
+    else:
+        print("Unable to find network weights")
+
+
+
+    tf.global_variables_initializer().run()
+    learning_rates = [
+    config.init_learning_rate * (
+        config.learning_rate_decay ** max(float(i + 1 - config.init_epoch), 0.0)
+    ) for i in range(config.max_epoch)]
+
+
+    predictions = []
+    for epoch_step in range(config.max_epoch):
+        current_lr = learning_rates[epoch_step]
+        total_loss = 0
+        j = 0
+        batches_X , batches_y = generate_batches(BATCH_SIZE , X_train , y_train , 0)
+
+
+        for batch_X, batch_y in zip(batches_X, batches_y):
+            train_data_feed = {
+                inputs: batch_X,
+                targets: batch_y,
+                learning_rate: current_lr
+            }
+            #print(batch_X , batch_y)
+
+            train_loss, _ = sess.run([loss, minimize], train_data_feed)
+            total_loss+=train_loss
+            #print(train_loss)
+
+            j+=1
+
+        print("Epoch" +str(epoch_step)+ "completed")
+        average_loss = total_loss/j
+        print("Average loss for this epoch is  " + str(average_loss))
+        print("\n")
+
+        #print("\n\n\n\n\n")
+
+        if(epoch_step % 40==0 and epoch_step>0):
+            print("Saving state")
+            saver = tf.train.Saver()
+            saver.save(sess, 'saved_networks/' , global_step = epoch_step)
+
 
 if __name__== "__main__":
-    train()
+    print("Training pls")
+    sess = tf.InteractiveSession()
+    inp , output , learning_rate = create_placeholders()
+    train(inp , output , learning_rate , sess)
     print(X_test.shape)
     print(y_test.shape)
     #test(X_test , y_test)
