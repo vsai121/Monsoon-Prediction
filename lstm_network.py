@@ -6,7 +6,7 @@ import loader as l
 
 
 
-BATCH_SIZE = 20 #BATCH GRADIENT DESCENT FOR TRAINING
+BATCH_SIZE = 80 #BATCH GRADIENT DESCENT FOR TRAINING
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
 
@@ -38,15 +38,15 @@ def generate_batches(batch_size , X_train , Y_train , validation_phase):
 class RNNConfig():
 
     input_size=1
-    num_steps=40
+    num_steps=60
     lstm_size=256
     num_layers=2
     keep_prob=0.8
     batch_size = 50
-    init_learning_rate = 0.01
+    init_learning_rate = 0.03
     learning_rate_decay = 0.99
     init_epoch = 5
-    max_epoch = 2000
+    max_epoch = 1000
 
 config = RNNConfig()
 
@@ -108,7 +108,7 @@ def compute_loss(prediction , targets , learning_rate):
 
     loss = tf.reduce_mean(tf.square(prediction - targets))
 
-    optimizer = tf.train.AdamOptimizer(learning_rate)
+    optimizer = tf.train.AdagradOptimizer(learning_rate)
     minimize = optimizer.minimize(loss)
 
     return loss , optimizer , minimize
@@ -175,7 +175,7 @@ def train(inputs , targets , learning_rate , sess):
 
 
 if __name__== "__main__":
-    print("Training pls")
+    print("Training haha xD")
     sess = tf.InteractiveSession()
     inp , output , learning_rate = create_placeholders()
     train(inp , output , learning_rate , sess)
