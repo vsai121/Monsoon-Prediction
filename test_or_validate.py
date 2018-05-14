@@ -38,8 +38,9 @@ def generate_batches(batch_size , X_train , Y_train):
 class RNNConfig():
 
     input_size=1
-    num_steps=32
-    lstm_size=8
+    output_size = l.NUM_STEPS+l.LEAD_TIME - 1
+    num_steps=l.NUM_STEPS
+    lstm_size=6
     num_layers=1
     keep_prob=1
     batch_size = 256
@@ -85,8 +86,8 @@ def init_params(inputs):
     last = tf.gather(val, int(val.get_shape()[0]) - 1, name="last_lstm_output")
 
     #weight and bias between hidden and output layer
-    Why = weight_variable([config.lstm_size , config.input_size])
-    by = bias_variable([config.input_size])
+    Why = weight_variable([config.lstm_size , config.output_size])
+    by = bias_variable([config.output_size])
 
     return last , Why , by
 
@@ -116,13 +117,14 @@ def test(inputs ,sess):
         print("Unable to find network weights")
 
 
-    predictions = []
-
-    batches_X , batches_y = generate_batches(BATCH_SIZE , X_validation , y_validation)
+    batches_X , batches_y = generate_batches(BATCH_SIZE , X_test, y_test)
 
     preds = []
     act = []
     for batch_X, batch_y in zip(batches_X, batches_y):
+        #print(batch_X)
+        #print(batch_y)
+        print("\n\n\n")
         validation_data_feed = {
             inputs: batch_X,
 
@@ -133,12 +135,13 @@ def test(inputs ,sess):
 
         #print(train_loss)
         for p in pred:
-            preds.append(p)
+            preds.append(p[-1])
 
         for a in batch_y:
-            act.append(a)
-    fig = plt.figure()
+            act.append(a[-1])
 
+    preds = [p for p in preds]
+    fig = plt.figure()
     cost = [((a_i - b_i)**2)/len(act) for a_i, b_i in zip(preds, act)]
     print(sum(cost))
 
@@ -160,7 +163,7 @@ def test(inputs ,sess):
     plt.show()
 
 if __name__== "__main__":
-    print("Testing haha xD")
+    print("Testing haha chutiya xD")
     sess = tf.InteractiveSession()
     inp  = create_placeholders()
     test(inp ,  sess)

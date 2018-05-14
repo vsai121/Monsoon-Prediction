@@ -6,10 +6,10 @@ from sklearn.preprocessing import StandardScaler
 import csv
 
 INPUT_SIZE = 1
-NUM_STEPS = 32 #  DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 30  # PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 60 #  DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 4 # PREDICITNG LEAD_TIME DAYS AHEAD
 TRAIN_TEST_RATIO = 0.09
-TRAIN_VALIDATION_RATIO = 0.12
+TRAIN_VALIDATION_RATIO = 0.05
 
 def read_csv_file(filename):
     name = filename
@@ -73,7 +73,7 @@ def split_data(input):
 
     """Split into groups of num_steps"""
     X = np.array([seq[i: i + NUM_STEPS] for i in range(len(seq) - NUM_STEPS - LEAD_TIME)])
-    y = np.array([seq[i + NUM_STEPS + LEAD_TIME] for i in range(len(seq) - NUM_STEPS - LEAD_TIME)])
+    y = np.array([seq[i+1:i + NUM_STEPS + LEAD_TIME] for i in range(len(seq) - NUM_STEPS - LEAD_TIME)])
 
     return X , y
 
@@ -101,6 +101,12 @@ def process():
     plt.plot(rainfall)
     plt.show()
     X,y = split_data(rainfall)
+
+    print(X.shape)
+    print(y.shape)
+
+    y = np.reshape(y , [y.shape[0] , y.shape[1]])
+    print(y.shape)
     """
     print(X[0])
     print(y[0])

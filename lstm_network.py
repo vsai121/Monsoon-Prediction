@@ -38,11 +38,12 @@ def generate_batches(batch_size , X_train , Y_train , validation_phase):
 class RNNConfig():
 
     input_size=1
-    num_steps=32
-    lstm_size=4
-    num_layers=2
-    keep_prob=0.25
-    batch_size = 50
+    output_size = l.NUM_STEPS+l.LEAD_TIME - 1
+    num_steps=l.NUM_STEPS
+    lstm_size=6
+    num_layers=1
+    keep_prob=0.4
+    batch_size = 256
     init_learning_rate = 0.03
     learning_rate_decay = 1
     init_epoch = 5
@@ -56,7 +57,7 @@ lstm_graph = tf.Graph()
 
 def create_placeholders():
     inputs = tf.placeholder(dtype= tf.float32, shape = [None, config.num_steps, config.input_size])
-    targets = tf.placeholder(dtype = tf.float32, shape = [None, config.input_size])
+    targets = tf.placeholder(dtype = tf.float32, shape = [None, config.output_size ])
     learning_rate = tf.placeholder(dtype=tf.float32, shape=None)
 
     return inputs , targets , learning_rate
@@ -92,8 +93,8 @@ def init_params(inputs):
     last = tf.gather(val, int(val.get_shape()[0]) - 1, name="last_lstm_output")
 
     #weight and bias between hidden and output layer
-    Why = weight_variable([config.lstm_size , config.input_size])
-    by = bias_variable([config.input_size])
+    Why = weight_variable([config.lstm_size , config.output_size])
+    by = bias_variable([config.output_size])
 
     return last , Why , by
 
@@ -101,7 +102,6 @@ def compute_output(inputs):
 
     last , Why , by = init_params(inputs)
     prediction = tf.matmul(last, Why) + by
-
     return prediction
 
 def compute_loss(prediction , targets , learning_rate):
@@ -173,7 +173,7 @@ def train(inputs , targets , learning_rate , sess):
 
 
 if __name__== "__main__":
-    print("Training haha xD")
+    print("haha finally maybexD")
     sess = tf.InteractiveSession()
     inp , output , learning_rate = create_placeholders()
     train(inp , output , learning_rate , sess)
