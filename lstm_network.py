@@ -35,19 +35,21 @@ def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
     return batches_X , batches_Y
 
+
+
 class RNNConfig():
 
     input_size=1
-    output_size = l.NUM_STEPS+l.LEAD_TIME - 1
+    output_size = l.LEAD_TIME
     num_steps=l.NUM_STEPS
-    lstm_size=6
+    lstm_size=8
     num_layers=1
-    keep_prob=0.4
+    keep_prob=0.3
     batch_size = 256
-    init_learning_rate = 0.03
+    init_learning_rate = 0.1
     learning_rate_decay = 1
     init_epoch = 5
-    max_epoch = 10000
+    max_epoch = 2500
 
 config = RNNConfig()
 
@@ -66,7 +68,7 @@ def weight_variable(shape):
     return (tf.Variable(tf.truncated_normal(shape=shape)))
 
 def bias_variable(shape):
-    return tf.Variable(tf.constant(0.1, shape=shape))
+    return tf.Variable(tf.constant(0.0, shape=shape))
 
 def create_one_cell():
 
@@ -106,8 +108,9 @@ def compute_output(inputs):
 
 def compute_loss(prediction , targets , learning_rate):
 
-    loss = tf.reduce_mean(tf.square(prediction - targets))
 
+    loss = tf.reduce_mean(tf.square(prediction - targets))
+    #loss = tf.reduce_mean(loss)
     optimizer = tf.train.AdagradOptimizer(learning_rate)
     minimize = optimizer.minimize(loss)
 
@@ -141,7 +144,7 @@ def train(inputs , targets , learning_rate , sess):
         current_lr = learning_rates[epoch_step]
         total_loss = 0
         j = 0
-        batches_X , batches_y = generate_batches(BATCH_SIZE , X_train , y_train , 0)
+        batches_X , batches_y = generate_batches(BATCH_SIZE , X_test , y_test , 0)
 
 
         for batch_X, batch_y in zip(batches_X, batches_y):
@@ -173,7 +176,7 @@ def train(inputs , targets , learning_rate , sess):
 
 
 if __name__== "__main__":
-    print("haha finally maybexD")
+    print("hopeful xD")
     sess = tf.InteractiveSession()
     inp , output , learning_rate = create_placeholders()
     train(inp , output , learning_rate , sess)

@@ -5,6 +5,7 @@ import random
 import loader as l
 
 import matplotlib.pyplot as plt
+from scipy import spatial
 
 
 
@@ -38,9 +39,9 @@ def generate_batches(batch_size , X_train , Y_train):
 class RNNConfig():
 
     input_size=1
-    output_size = l.NUM_STEPS+l.LEAD_TIME - 1
+    output_size =l.LEAD_TIME
     num_steps=l.NUM_STEPS
-    lstm_size=6
+    lstm_size=8
     num_layers=1
     keep_prob=1
     batch_size = 256
@@ -117,17 +118,16 @@ def test(inputs ,sess):
         print("Unable to find network weights")
 
 
-    batches_X , batches_y = generate_batches(BATCH_SIZE , X_test, y_test)
+    batches_X , batches_y = generate_batches(BATCH_SIZE , X_train, y_train)
 
     preds = []
     act = []
     for batch_X, batch_y in zip(batches_X, batches_y):
         #print(batch_X)
         #print(batch_y)
-        print("\n\n\n")
+        #print("\n\n\n")
         validation_data_feed = {
             inputs: batch_X,
-
         }
         #print(batch_X , batch_y)
 
@@ -135,17 +135,18 @@ def test(inputs ,sess):
 
         #print(train_loss)
         for p in pred:
-            preds.append(p[-1])
+            preds.append(p[28])
 
         for a in batch_y:
-            act.append(a[-1])
+            act.append(a[28])
 
-    preds = [p for p in preds]
     fig = plt.figure()
-    cost = [((a_i - b_i)**2)/len(act) for a_i, b_i in zip(preds, act)]
-    print(sum(cost))
+    for i in range(len (preds)):
+        cost = [abs(a_i - b_i) for a_i, b_i in zip(preds, act)]
+    print(sum(cost)/len(cost))
 
-
+    print("Preds" , preds)
+    print("Actual" , act)
 # Make room for legend at bottom
     fig.subplots_adjust(bottom=0.2)
 
@@ -153,8 +154,8 @@ def test(inputs ,sess):
     ax1 = fig.add_subplot(111)
 
     # Plot lines 1-3
-    line1 = ax1.plot(preds,'bo-',label='list 1')
-    line2 = ax1.plot(act,'go-',label='list 2')
+    line1 = ax1.plot(preds[0:50],'bo-',label='list 1')
+    line2 = ax1.plot(act[0:50],'go-',label='list 2')
 
 
 
@@ -163,7 +164,7 @@ def test(inputs ,sess):
     plt.show()
 
 if __name__== "__main__":
-    print("Testing haha chutiya xD")
+    print("Testing  xD")
     sess = tf.InteractiveSession()
     inp  = create_placeholders()
     test(inp ,  sess)
