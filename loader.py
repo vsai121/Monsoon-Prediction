@@ -6,10 +6,10 @@ from sklearn.preprocessing import StandardScaler
 import csv
 
 INPUT_SIZE = 1
-NUM_STEPS = 500 #  DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 29 # PREDICITNG LEAD_TIME DAYS AHEAD
-TRAIN_TEST_RATIO = 0.09
-TRAIN_VALIDATION_RATIO = 0.05
+NUM_STEPS = 60#  DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 4 # PREDICITNG LEAD_TIME DAYS AHEAD
+TRAIN_TEST_RATIO = 0.08
+TRAIN_VALIDATION_RATIO = 0.04
 
 
 
@@ -32,20 +32,20 @@ def read_csv_file(filename):
         """get total number of rows"""
         print("Total no. of rows: %d"%(csvreader.line_num))
 
-    """printing first 5 rows"""
+    """printing first 5 rows
     print('\nFirst 5 rows are:\n')
     for row in rows[:5]:
 
         for col in row:
             print("%10s"%col),
         print('\n')
-
+    """
 
     return rows
 
 
 def read_rainfall():
-    data = read_csv_file('Data/normalized_daily_rainfall_central_India_1901_2014.csv')
+    data = read_csv_file('Data/daily_rainfall_central_India_1901_2014.csv')
     rainfall = []
 
     """Creating list of rainfall data"""
@@ -53,14 +53,15 @@ def read_rainfall():
         for col in row:
 
             if float(col)<5000:
-                rainfall.append(float(col))
+                rainfall.append(float(col)+1)
 
     return rainfall
 
 def normalize_seq(seq):
 
     #print(seq)
-    seq = [seq[0] / seq[0][0] - 1.0] + [curr / seq[i-1][-1] - 1.0 for i, curr in enumerate(seq[1:])]
+
+    seq = [curr / seq[0] - 1.0 for curr in seq]
     return seq
 
 def split_data(input):
@@ -72,17 +73,33 @@ def split_data(input):
     seq = [np.array(input[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
        for i in range(len(input) // INPUT_SIZE)]
 
+
     #Normalizing seq
     #seq = normalize_seq(seq)
 
-    """Split into groups of num_steps"""
-    X = np.array([seq[i: i + NUM_STEPS] for i in range(len(seq) - NUM_STEPS - LEAD_TIME)])
-    y = np.array([seq[i+NUM_STEPS:i + NUM_STEPS + LEAD_TIME] for i in range(len(seq) - NUM_STEPS - LEAD_TIME)])
+    X=[]
+    y=[]
+    y_org=[]
+    for i in range(len(seq) - NUM_STEPS - LEAD_TIME):
+        temp = np.array(seq[i: i + NUM_STEPS+LEAD_TIME])
+        temp1 = normalize_seq(temp)
+        X.append(temp1[0:NUM_STEPS])
+        y.append(temp1[NUM_STEPS:NUM_STEPS+LEAD_TIME])
+        y_org.append(temp[0])
+    print(X[0])
+    print(y[0])
 
-    return X , y
+
+    print(X[1])
+    print(y[1])
 
 
-def train_test_split(X , y):
+    X = np.asarray(X , dtype=np.float32)
+    y = np.asarray(y , dtype=np.float32)
+    return X , y , y_org
+
+
+def train_test_split(X , y , y_org):
 
     """
     Splitting data into training and test data"
@@ -90,11 +107,11 @@ def train_test_split(X , y):
 
     train_size = int(len(X) * (1.0 - TRAIN_TEST_RATIO))
     X_train, X_test = X[:train_size], X[train_size:]
-    y_train, y_test = y[:train_size], y[train_size:]
+    y_train, y_test , y_org_test = y[:train_size], y[train_size:] , y_org[train_size:]
 
     train_size = int(len(X_train) * (1- TRAIN_VALIDATION_RATIO))
     X_train , X_validation = X_train[:train_size] , X_train[train_size:]
-    y_train, y_validation = y_train[:train_size], y_train[train_size:]
+    y_train, y_validation , y_org_validation = y_train[:train_size], y_train[train_size:] , y_org[train_size:]
 
     return X_train , y_train , X_validation , y_validation , X_test , y_test
 
@@ -104,38 +121,24 @@ def process():
     #print("Rainfall" , rainfall[0:124])
     plt.plot(rainfall)
     plt.show()
-    X,y = split_data(rainfall)
+    X,y , y_org = split_data(rainfall)
 
     print(X.shape)
     print(y.shape)
-    print(np.min(X))
+
+
+    y = np.reshape(y , [y.shape[0] , LEAD_TIME])
+
     print(np.max(X))
-    y = np.reshape(y , [y.shape[0] , y.shape[1]])
-    print(y.shape)
+    print(np.min(y))
     """
     print(X[0])
     print(y[0])
-    print("\n\n\n")
 
     print(X[1])
     print(y[1])
-    print("\n\n\n")
-
-    print(X[2])
-    print(y[2])
-    print("\n\n\n")
-
-    print(X[-2])
-    print(y[-2])
-    print("\n\n\n")
-
-    print(X[-1])
-    print(y[-1])
-    print("\n\n\n")
-
     """
-
-    X_train , y_train , X_validation , y_validation , X_test , y_test = train_test_split(X,y)
+    X_train , y_train , X_validation , y_validation , X_test , y_test = train_test_split(X,y , y_org)
 
     """
     print(X_train.shape)
@@ -149,7 +152,8 @@ def process():
 
     """
 
-    return X_train , y_train , X_validation , y_validation , X_test , y_test
+
+    return X_train , y_train , X_validation , y_validation , X_test , y_test , y_org_validation , y_org_test
 
 if __name__ == '__main__':
     process()

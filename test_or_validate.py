@@ -9,7 +9,7 @@ from scipy import spatial
 
 
 
-X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
+X_train , y_train ,X_validation , y_validation ,  X_test , y_test , y_org_validation , y_org_test = l.process()
 
 BATCH_SIZE = 256 #BATCH GRADIENT DESCENT FOR TRAINING
 
@@ -41,8 +41,8 @@ class RNNConfig():
     input_size=1
     output_size =l.LEAD_TIME
     num_steps=l.NUM_STEPS
-    lstm_size=8
-    num_layers=1
+    lstm_size=3
+    num_layers=2
     keep_prob=1
     batch_size = 256
 
@@ -66,7 +66,7 @@ def bias_variable(shape):
 
 def create_one_cell():
 
-    return tf.contrib.rnn.LSTMCell(config.lstm_size, state_is_tuple=True)
+    return tf.contrib.rnn.LSTMCell(config.lstm_size, forget_bias = 1 , state_is_tuple=True)
 
 def multiple_layers():
 
@@ -118,10 +118,11 @@ def test(inputs ,sess):
         print("Unable to find network weights")
 
 
-    batches_X , batches_y = generate_batches(BATCH_SIZE , X_train, y_train)
+    batches_X , batches_y = generate_batches(BATCH_SIZE , X_validation, y_validation)
 
     preds = []
     act = []
+    k = 0
     for batch_X, batch_y in zip(batches_X, batches_y):
         #print(batch_X)
         #print(batch_y)
@@ -134,16 +135,20 @@ def test(inputs ,sess):
         pred = sess.run(prediction , validation_data_feed)
 
         #print(train_loss)
-        for p in pred:
-            preds.append(p[28])
 
-        for a in batch_y:
-            act.append(a[28])
+        for a , p in zip(batch_y , pred):
 
+            preds.append((p[-1]+1)*y_org_validation[k])
+            act.append((a[-1]+1)*y_org_validation[k])
+
+
+        k += 1
     fig = plt.figure()
+
     for i in range(len (preds)):
         cost = [abs(a_i - b_i) for a_i, b_i in zip(preds, act)]
     print(sum(cost)/len(cost))
+
 
     print("Preds" , preds)
     print("Actual" , act)
@@ -152,10 +157,9 @@ def test(inputs ,sess):
 
     # The axes for your lists 1-3
     ax1 = fig.add_subplot(111)
-
     # Plot lines 1-3
-    line1 = ax1.plot(preds[0:50],'bo-',label='list 1')
-    line2 = ax1.plot(act[0:50],'go-',label='list 2')
+    line1 = ax1.plot(preds,'bo-',label='list 1')
+    line2 = ax1.plot(act,'go-',label='list 2')
 
 
 

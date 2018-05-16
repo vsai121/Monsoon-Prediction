@@ -8,7 +8,7 @@ import loader as l
 
 BATCH_SIZE = 256 #BATCH GRADIENT DESCENT FOR TRAINING
 
-X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
+X_train , y_train ,X_validation , y_validation ,  X_test , y_test , _ , _ = l.process()
 
 def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
@@ -42,9 +42,9 @@ class RNNConfig():
     input_size=1
     output_size = l.LEAD_TIME
     num_steps=l.NUM_STEPS
-    lstm_size=8
-    num_layers=1
-    keep_prob=0.3
+    lstm_size=3
+    num_layers=2
+    keep_prob=0.5
     batch_size = 256
     init_learning_rate = 0.1
     learning_rate_decay = 1
@@ -108,8 +108,9 @@ def compute_output(inputs):
 
 def compute_loss(prediction , targets , learning_rate):
 
-
-    loss = tf.reduce_mean(tf.square(prediction - targets))
+    net = [v for v in tf.trainable_variables()]
+    weight_reg = tf.add_n([0.01 * tf.nn.l2_loss(var) for var in net])
+    loss = tf.reduce_mean(tf.square(prediction - targets)) + weight_reg
     #loss = tf.reduce_mean(loss)
     optimizer = tf.train.AdagradOptimizer(learning_rate)
     minimize = optimizer.minimize(loss)
@@ -141,10 +142,13 @@ def train(inputs , targets , learning_rate , sess):
 
     predictions = []
     for epoch_step in range(config.max_epoch):
+        print("Epoch" , epoch_step)
+        #print("\n\n\n")
+
         current_lr = learning_rates[epoch_step]
         total_loss = 0
         j = 0
-        batches_X , batches_y = generate_batches(BATCH_SIZE , X_test , y_test , 0)
+        batches_X , batches_y = generate_batches(BATCH_SIZE , X_train , y_train , 0)
 
 
         for batch_X, batch_y in zip(batches_X, batches_y):
@@ -154,16 +158,22 @@ def train(inputs , targets , learning_rate , sess):
                 learning_rate: current_lr
             }
             #print(batch_X , batch_y)
+            #print("batch_X" , batch_X)
+            #print("batch_y" , batch_y)
+            pred = sess.run(prediction ,  train_data_feed)
+            #print("prediction" , pred)
 
             train_loss, _ = sess.run([loss, minimize], train_data_feed)
+            #print("train_loss" , train_loss)
+
+            #print("\n\n\n")
             total_loss+=train_loss
             #print(train_loss)
 
             j+=1
 
+        print("Total loss" , total_loss)
         print("Epoch" +str(epoch_step)+ "completed")
-        average_loss = total_loss/j
-        print("Average loss for this epoch is  " + str(average_loss))
         print("\n")
 
         #print("\n\n\n\n\n")
@@ -176,7 +186,7 @@ def train(inputs , targets , learning_rate , sess):
 
 
 if __name__== "__main__":
-    print("hopeful xD")
+    print("hopeful chutiya what daxD")
     sess = tf.InteractiveSession()
     inp , output , learning_rate = create_placeholders()
     train(inp , output , learning_rate , sess)
