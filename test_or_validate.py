@@ -7,7 +7,10 @@ import loader as l
 import matplotlib.pyplot as plt
 from scipy import spatial
 
+from sklearn import datasets, linear_model
+from sklearn.metrics import mean_squared_error, r2_score
 
+import math
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test , y_org_validation , y_org_test = l.process()
 
@@ -39,10 +42,10 @@ def generate_batches(batch_size , X_train , Y_train):
 class RNNConfig():
 
     input_size=1
-    output_size =l.LEAD_TIME
+    output_size = l.LEAD_TIME
     num_steps=l.NUM_STEPS
-    lstm_size=3
-    num_layers=2
+    lstm_size=[16,32]
+    num_layers=len(lstm_size)
     keep_prob=1
     batch_size = 256
 
@@ -59,24 +62,28 @@ def create_placeholders():
     return inputs
 
 def weight_variable(shape):
-    return (tf.Variable(tf.truncated_normal(shape=shape)))
+    return (tf.Variable(tf.random_normal(shape=shape , stddev=0.1)))
+
 
 def bias_variable(shape):
     return tf.Variable(tf.constant(0.1, shape=shape))
 
-def create_one_cell():
+def create_one_cell(lstm_size):
 
-    return tf.contrib.rnn.LSTMCell(config.lstm_size, forget_bias = 1 , state_is_tuple=True)
+    return tf.contrib.rnn.LSTMCell(lstm_size, state_is_tuple=True)
+    if config.keep_prob < 1.0:
+        return tf.contrib.rnn.DropoutWrapper(lstm_cell, output_keep_prob=config.keep_prob)
 
 def multiple_layers():
 
     if config.num_layers >1:
-        cell = tf.contrib.rnn.MultiRNNCell([create_one_cell() for _ in range(config.num_layers)],state_is_tuple=True)
+        cell = tf.contrib.rnn.MultiRNNCell([create_one_cell(config.lstm_size[i]) for i in range(config.num_layers)],state_is_tuple=True)
 
     else:
-        cell = create_one_cell()
+        cell = create_one_cell(config.lstm_size[-1])
 
     return cell
+
 
 def init_params(inputs):
     cell = multiple_layers()
@@ -87,7 +94,7 @@ def init_params(inputs):
     last = tf.gather(val, int(val.get_shape()[0]) - 1, name="last_lstm_output")
 
     #weight and bias between hidden and output layer
-    Why = weight_variable([config.lstm_size , config.output_size])
+    Why = weight_variable([config.lstm_size[-1] , config.output_size])
     by = bias_variable([config.output_size])
 
     return last , Why , by
@@ -101,11 +108,11 @@ def compute_output(inputs):
 
 
 
-def test(inputs ,sess):
+def test(inputs , prediction , sess , saver):
 
-    prediction = compute_output(inputs)
+    #prediction = compute_output(inputs)
 
-    saver = tf.train.Saver()
+    #saver = tf.train.Saver()
     init = tf.global_variables_initializer()
     sess.run(init)
 
@@ -122,7 +129,7 @@ def test(inputs ,sess):
 
     preds = []
     act = []
-    k = 0
+    k=0
     for batch_X, batch_y in zip(batches_X, batches_y):
         #print(batch_X)
         #print(batch_y)
@@ -138,20 +145,23 @@ def test(inputs ,sess):
 
         for a , p in zip(batch_y , pred):
 
-            preds.append((p[-1]+1)*y_org_validation[k])
-            act.append((a[-1]+1)*y_org_validation[k])
+
+            preds.append(math.pow(2,p[-1]*11)*y_org_validation[k])
+            act.append(math.pow(2,a[-1]*11)*y_org_validation[k])
 
 
-        k += 1
+            k += 1
+
+
     fig = plt.figure()
 
+
     for i in range(len (preds)):
-        cost = [abs(a_i - b_i) for a_i, b_i in zip(preds, act)]
+        cost = [(a_i - b_i)**2 for a_i, b_i in zip(preds, act)]
     print(sum(cost)/len(cost))
 
 
-    print("Preds" , preds)
-    print("Actual" , act)
+
 # Make room for legend at bottom
     fig.subplots_adjust(bottom=0.2)
 
@@ -167,7 +177,8 @@ def test(inputs ,sess):
     # Display the figure
     plt.show()
 
-if __name__== "__main__":
+def process():
+
     print("Testing  xD")
     sess = tf.InteractiveSession()
     inp  = create_placeholders()
