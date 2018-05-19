@@ -3,16 +3,17 @@ import numpy as np
 
 import random
 import loader as l
-import test_or_validate as t
+
 import math
 
 
 from sklearn import datasets, linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 
-BATCH_SIZE = 256 #BATCH GRADIENT DESCENT FOR TRAINING
+#BATCH GRADIENT DESCENT FOR TRAINING
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test , _ , _ = l.process()
+BATCH_SIZE =  256
 
 def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
@@ -24,8 +25,8 @@ def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
     batch_indices = range(num_batches)
 
-    if not validation_phase:
-        random.shuffle(batch_indices)
+
+    random.shuffle(batch_indices)
     #print("batch_indices" , batch_indices)
     batches_X = []
     batches_Y = []
@@ -44,16 +45,16 @@ def generate_batches(batch_size , X_train , Y_train , validation_phase):
 class RNNConfig():
 
     input_size=1
-    output_size = l.LEAD_TIME
+    output_size = 1
     num_steps=l.NUM_STEPS
-    lstm_size=[16,32]
+    lstm_size=[64]
     num_layers=len(lstm_size)
-    keep_prob=0.5
+    keep_prob=0.75
     batch_size = 256
-    init_learning_rate = 0.1
+    init_learning_rate = 0.01
     learning_rate_decay = 1
     init_epoch = 5
-    max_epoch = 24
+    max_epoch = 1000
 
 config = RNNConfig()
 
@@ -69,29 +70,40 @@ def create_placeholders():
     return inputs , targets , learning_rate
 
 def weight_variable(shape):
-    return (tf.Variable(tf.random_normal(shape=shape , stddev=0.1)))
+    return (tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
 
 def bias_variable(shape):
     return tf.Variable(tf.constant(0.1, shape=shape))
 
 def create_one_cell(lstm_size):
 
-    return tf.contrib.rnn.LSTMCell(lstm_size, state_is_tuple=True)
+    return tf.nn.rnn_cell.LSTMCell(lstm_size, state_is_tuple=True)
     if config.keep_prob < 1.0:
         return tf.contrib.rnn.DropoutWrapper(lstm_cell, output_keep_prob=config.keep_prob)
 
 def multiple_layers():
 
     if config.num_layers >1:
-        cell = tf.contrib.rnn.MultiRNNCell([create_one_cell(config.lstm_size[i]) for i in range(config.num_layers)],state_is_tuple=True)
+        cell = tf.nn.rnn_cell.MultiRNNCell([create_one_cell(config.lstm_size[i]) for i in range(config.num_layers)],state_is_tuple=True )
 
     else:
         cell = create_one_cell(config.lstm_size[-1])
 
     return cell
 
+
+def create_network():
+    cells = []
+    for i in range(config.num_layers):
+        cell = tf.contrib.rnn.LSTMCell(config.lstm_size[i])  # Or LSTMCell(num_units)
+        cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=0.8)
+        cells.append(cell)
+
+    cell = tf.contrib.rnn.MultiRNNCell(cells)
+    return cell
+
 def init_params(inputs):
-    cell = multiple_layers()
+    cell = create_network()
     val,_ = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32)
 
     #print(val.shape)
@@ -114,9 +126,9 @@ def compute_loss(prediction , targets , learning_rate):
 
     net = [v for v in tf.trainable_variables()]
     weight_reg = tf.add_n([0.01 * tf.nn.l2_loss(var) for var in net])
-    loss = tf.reduce_mean(tf.square(prediction - targets)) + weight_reg
+    loss = tf.reduce_mean(tf.abs(prediction - targets)) + weight_reg
     #loss = tf.reduce_mean(loss)
-    optimizer = tf.train.AdagradOptimizer(learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate)
     minimize = optimizer.minimize(loss)
 
     return loss , optimizer , minimize
@@ -182,11 +194,11 @@ def train(inputs , targets , learning_rate , sess):
 
         #print("\n\n\n\n\n")
 
-        if(epoch_step % 2==0 and epoch_step>0):
+        if epoch_step%2==0:
             print("Saving state")
             saver = tf.train.Saver()
             saver.save(sess, 'saved_networks/' , global_step = epoch_step)
-            t.test(inputs , prediction ,  sess , saver)
+            #t.test(inputs , prediction ,  sess , saver)
 
 if __name__== "__main__":
     print("normalized data! xD")

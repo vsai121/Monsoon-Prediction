@@ -14,7 +14,9 @@ import math
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test , y_org_validation , y_org_test = l.process()
 
-BATCH_SIZE = 256 #BATCH GRADIENT DESCENT FOR TRAINING
+
+
+BATCH_SIZE = 256#BATCH GRADIENT DESCENT FOR TRAINING
 
 def generate_batches(batch_size , X_train , Y_train):
 
@@ -42,12 +44,12 @@ def generate_batches(batch_size , X_train , Y_train):
 class RNNConfig():
 
     input_size=1
-    output_size = l.LEAD_TIME
+    output_size = 1
     num_steps=l.NUM_STEPS
-    lstm_size=[16,32]
+    lstm_size=[64]
     num_layers=len(lstm_size)
     keep_prob=1
-    batch_size = 256
+    batch_size = 64
 
 
 config = RNNConfig()
@@ -64,15 +66,13 @@ def create_placeholders():
 def weight_variable(shape):
     return (tf.Variable(tf.random_normal(shape=shape , stddev=0.1)))
 
-
 def bias_variable(shape):
     return tf.Variable(tf.constant(0.1, shape=shape))
 
 def create_one_cell(lstm_size):
 
-    return tf.contrib.rnn.LSTMCell(lstm_size, state_is_tuple=True)
-    if config.keep_prob < 1.0:
-        return tf.contrib.rnn.DropoutWrapper(lstm_cell, output_keep_prob=config.keep_prob)
+    return tf.contrib.rnn.LSTMCell(lstm_size, state_is_tuple=True , activation=tf.nn.tanh , forget_bias=0.0)
+
 
 def multiple_layers():
 
@@ -85,8 +85,18 @@ def multiple_layers():
     return cell
 
 
+def create_network():
+    cells = []
+    for i in range(config.num_layers):
+        cell = tf.contrib.rnn.LSTMCell(config.lstm_size[i])  # Or LSTMCell(num_units)
+        cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=1)
+        cells.append(cell)
+
+    cell = tf.contrib.rnn.MultiRNNCell(cells)
+    return cell
+
 def init_params(inputs):
-    cell = multiple_layers()
+    cell = create_network()
     val,_ = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32)
 
     #print(val.shape)
@@ -108,11 +118,11 @@ def compute_output(inputs):
 
 
 
-def test(inputs , prediction , sess , saver):
+def test(inputs , sess):
 
-    #prediction = compute_output(inputs)
+    prediction = compute_output(inputs)
 
-    #saver = tf.train.Saver()
+    saver = tf.train.Saver()
     init = tf.global_variables_initializer()
     sess.run(init)
 
@@ -125,10 +135,11 @@ def test(inputs , prediction , sess , saver):
         print("Unable to find network weights")
 
 
-    batches_X , batches_y = generate_batches(BATCH_SIZE , X_validation, y_validation)
+    batches_X , batches_y = generate_batches(BATCH_SIZE , X_test, y_test)
 
     preds = []
     act = []
+    temp=[]
     k=0
     for batch_X, batch_y in zip(batches_X, batches_y):
         #print(batch_X)
@@ -146,24 +157,33 @@ def test(inputs , prediction , sess , saver):
         for a , p in zip(batch_y , pred):
 
 
-            preds.append(math.pow(2,p[-1]*11)*y_org_validation[k])
-            act.append(math.pow(2,a[-1]*11)*y_org_validation[k])
+            preds.append(p[-1])
+            act.append(a[-1])
+
 
 
             k += 1
 
 
-    fig = plt.figure()
 
+    print(min(preds))
+    print(max(preds))
+
+    print(min(act))
+    print(max(act))
 
     for i in range(len (preds)):
-        cost = [(a_i - b_i)**2 for a_i, b_i in zip(preds, act)]
+        cost = [abs(a_i - b_i) for a_i, b_i in zip(preds, act)]
     print(sum(cost)/len(cost))
+
+    fig = plt.figure()
 
 
 
 # Make room for legend at bottom
+
     fig.subplots_adjust(bottom=0.2)
+
 
     # The axes for your lists 1-3
     ax1 = fig.add_subplot(111)
@@ -171,15 +191,15 @@ def test(inputs , prediction , sess , saver):
     line1 = ax1.plot(preds,'bo-',label='list 1')
     line2 = ax1.plot(act,'go-',label='list 2')
 
-
-
-
     # Display the figure
     plt.show()
 
 def process():
 
-    print("Testing  xD")
+    print("Testing  chutiyaxD")
     sess = tf.InteractiveSession()
     inp  = create_placeholders()
     test(inp ,  sess)
+
+if __name__ == '__main__':
+    process()
