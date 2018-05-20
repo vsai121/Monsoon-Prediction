@@ -9,10 +9,10 @@ import csv
 import math
 
 INPUT_SIZE = 1
-NUM_STEPS = 120#DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 15# PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 80#DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 10# PREDICITNG LEAD_TIME DAYS AHEAD
 TRAIN_TEST_RATIO = 0.08
-TRAIN_VALIDATION_RATIO = 0.04
+TRAIN_VALIDATION_RATIO = 0.1
 
 
 
@@ -57,11 +57,11 @@ def read_rainfall():
         for col in row:
 
             if float(col)>=5000:
-                rainfall.append(math.log((float(prev_col)+2),1.3))
+                rainfall.append(math.log((float(prev_col)+2),1.5))
                 prev_col = float(prev_col)
 
             else:
-                rainfall.append(math.log((float(col)+2),1.3))
+                rainfall.append(math.log((float(col)+2),1.5))
                 prev_col = float(col)
 
 
@@ -72,7 +72,7 @@ def normalize_seq(seq):
 
     #print(seq)
 
-    seq = [(curr/seq[0]) for curr in seq]
+    seq = [(curr/seq[0])-5 for curr in seq]
     return seq
 
 def split_data(input):
@@ -122,7 +122,10 @@ def split_data(input):
 
     X = np.asarray(X , dtype=np.float32)
     y = np.asarray(y , dtype=np.float32)
+
+
     return X , y , y_org
+
 
 
 def train_test_split(X , y , y_org):
@@ -132,21 +135,26 @@ def train_test_split(X , y , y_org):
     """
 
     train_size = int(len(X) * (1.0 - TRAIN_TEST_RATIO))
+
     X_train, X_test = X[:train_size], X[train_size:]
+
     y_train, y_test , y_org_test = y[:train_size], y[train_size:] , y_org[train_size:]
 
+    y_org = y_org[:train_size]
+
+    print("test" , len(y_org_test))
     train_size = int(len(X_train) * (1- TRAIN_VALIDATION_RATIO))
     X_train , X_validation = X_train[:train_size] , X_train[train_size:]
     y_train, y_validation , y_org_validation = y_train[:train_size], y_train[train_size:] , y_org[train_size:]
 
+    print("validation" , len(y_org_validation))
     return X_train , y_train , X_validation , y_validation , X_test , y_test , y_org_validation , y_org_test
 
 
 def process():
     rainfall = read_rainfall()
     #print("Rainfall" , rainfall[0:124])
-    #plt.plot(rainfall)
-    #plt.show()
+
     X,y , y_org = split_data(rainfall)
 
 
@@ -155,27 +163,11 @@ def process():
     y = np.reshape(y , [y.shape[0] , 1])
     X = np.reshape(X , [X.shape[0] , X.shape[1] , 1])
 
-    """
-    print(X.shape)
-    print(y.shape)
 
-    print(np.max(X))
-    print(np.min(X))
-
-    print(np.max(y))
-    print(np.min(y))
-    """
-
-    """
-    print(X[0])
-    print(y[0])
-
-    print(X[1])
-    print(y[1])
-    """
     X_train , y_train , X_validation , y_validation , X_test , y_test , y_org_validation , y_org_test = train_test_split(X,y , y_org)
 
-    """
+
+
     print(X_train.shape)
     print(y_train.shape)
 
@@ -185,7 +177,17 @@ def process():
     print(X_test.shape)
     print(y_test.shape)
 
+    print(np.min(X_train))
+    print(np.min(X_validation))
+    print(np.min(X_test))
+
     """
+    print(X_test[0])
+    print('End')
+    print(X[3617])
+    """
+
+
     #print(y_validation[0:5])
 
     return X_train , y_train , X_validation , y_validation , X_test , y_test , y_org_validation , y_org_test

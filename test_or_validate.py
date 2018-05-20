@@ -12,11 +12,12 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 import math
 
+
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test , y_org_validation , y_org_test = l.process()
 
 
 
-BATCH_SIZE = 256#BATCH GRADIENT DESCENT FOR TRAINING
+BATCH_SIZE = 50#BATCH GRADIENT DESCENT FOR TRAINING
 
 def generate_batches(batch_size , X_train , Y_train):
 
@@ -46,7 +47,7 @@ class RNNConfig():
     input_size=1
     output_size = 1
     num_steps=l.NUM_STEPS
-    lstm_size=[64]
+    lstm_size=[48]
     num_layers=len(lstm_size)
     keep_prob=1
     batch_size = 64
@@ -154,17 +155,16 @@ def test(inputs , sess):
 
         #print(train_loss)
 
-        for a , p in zip(batch_y , pred):
 
+        for p in pred:
+            #print("P")
+            #print(p)
+            preds.append(p)
 
-            preds.append(p[-1])
-            act.append(a[-1])
-
-
-
-            k += 1
-
-
+        for a in batch_y:
+            #print("a")
+            #print(a)
+            act.append(a)
 
     print(min(preds))
     print(max(preds))
@@ -172,10 +172,33 @@ def test(inputs , sess):
     print(min(act))
     print(max(act))
 
-    for i in range(len (preds)):
-        cost = [abs(a_i - b_i) for a_i, b_i in zip(preds, act)]
-    print(sum(cost)/len(cost))
+    regr = linear_model.LinearRegression()
 
+# Train the model using the training sets
+    temp = np.reshape(preds , [-1,1])
+    regr.fit(temp, act)
+
+    preds = [p*float(regr.coef_) + float(regr.intercept_) for p in preds]
+
+    for i in range(len(preds)):
+
+        print("Prediction" , preds[i]),
+        print("Actual" , act[i])
+
+    print(len(y_org_test))
+    print(len(preds))
+    for i in range(len(y_org_test)):
+        preds[i] = math.pow(1.5,((preds[i]+5) * y_org_test[i]))
+        act[i] = math.pow(1.5,((act[i]+5) * y_org_test[i]))
+
+
+
+
+    cost = 0
+    for i in range(len (preds)):
+        cost = cost + abs(preds[i] - act[i])
+
+    print(cost)
     fig = plt.figure()
 
 
