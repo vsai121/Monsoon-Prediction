@@ -47,7 +47,7 @@ class RNNConfig():
     input_size=1
     output_size = 1
     num_steps=l.NUM_STEPS
-    lstm_size=[4]
+    lstm_size=[100,80]
     num_layers=len(lstm_size)
     keep_prob=0.80
     batch_size = 256
@@ -128,7 +128,7 @@ def compute_loss(prediction , targets , learning_rate):
     weight_reg = tf.add_n([0.001 * tf.nn.l2_loss(var) for var in net])
     loss = tf.reduce_mean(tf.abs(prediction - targets)) + weight_reg
     #loss = tf.reduce_mean(loss)
-    optimizer = tf.train.AdamOptimizer(learning_rate)
+    optimizer = tf.train.RMSPropOptimizer(learning_rate)
     minimize = optimizer.minimize(loss)
 
     return loss , optimizer , minimize

@@ -47,7 +47,7 @@ class RNNConfig():
     input_size=1
     output_size = 1
     num_steps=l.NUM_STEPS
-    lstm_size=[48]
+    lstm_size=[100,80]
     num_layers=len(lstm_size)
     keep_prob=1
     batch_size = 64
@@ -136,7 +136,7 @@ def test(inputs , sess):
         print("Unable to find network weights")
 
 
-    batches_X , batches_y = generate_batches(BATCH_SIZE , X_test, y_test)
+    batches_X , batches_y = generate_batches(BATCH_SIZE , X_validation, y_validation)
 
     preds = []
     act = []
@@ -185,11 +185,12 @@ def test(inputs , sess):
         print("Prediction" , preds[i]),
         print("Actual" , act[i])
 
-    print(len(y_org_test))
+    print(len(y_org_validation))
     print(len(preds))
-    for i in range(len(y_org_test)):
-        preds[i] = math.pow(1.5,((preds[i]+5) * y_org_test[i]))
-        act[i] = math.pow(1.5,((act[i]+5) * y_org_test[i]))
+    for i in range(len(y_org_validation)):
+        print(y_org_validation[i])
+        preds[i] = math.pow(1.5,((preds[i]+5)*y_org_validation[i]))
+        act[i] = math.pow(1.5,(act[i]+5)*y_org_validation[i])
 
 
 
