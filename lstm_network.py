@@ -13,7 +13,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 #BATCH GRADIENT DESCENT FOR TRAINING
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test , _ , _ = l.process()
-BATCH_SIZE =  50
+BATCH_SIZE =  256
 
 def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
@@ -47,11 +47,11 @@ class RNNConfig():
     input_size=1
     output_size = 1
     num_steps=l.NUM_STEPS
-    lstm_size=[100,80]
+    lstm_size=[80,120]
     num_layers=len(lstm_size)
     keep_prob=0.80
     batch_size = 256
-    init_learning_rate = 0.0001
+    init_learning_rate = 0.0003
     learning_rate_decay = 1
     init_epoch = 5
     max_epoch = 1000
@@ -126,7 +126,7 @@ def compute_loss(prediction , targets , learning_rate):
 
     net = [v for v in tf.trainable_variables()]
     weight_reg = tf.add_n([0.001 * tf.nn.l2_loss(var) for var in net])
-    loss = tf.reduce_mean(tf.abs(prediction - targets)) + weight_reg
+    loss = tf.reduce_mean(tf.abs(prediction - targets)) + 0.1*weight_reg
     #loss = tf.reduce_mean(loss)
     optimizer = tf.train.RMSPropOptimizer(learning_rate)
     minimize = optimizer.minimize(loss)

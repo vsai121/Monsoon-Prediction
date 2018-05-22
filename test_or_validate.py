@@ -17,7 +17,7 @@ X_train , y_train ,X_validation , y_validation ,  X_test , y_test , y_org_valida
 
 
 
-BATCH_SIZE = 50#BATCH GRADIENT DESCENT FOR TRAINING
+BATCH_SIZE = 256#BATCH GRADIENT DESCENT FOR TRAINING
 
 def generate_batches(batch_size , X_train , Y_train):
 
@@ -47,7 +47,7 @@ class RNNConfig():
     input_size=1
     output_size = 1
     num_steps=l.NUM_STEPS
-    lstm_size=[100,80]
+    lstm_size=[80,120]
     num_layers=len(lstm_size)
     keep_prob=1
     batch_size = 64
@@ -175,24 +175,23 @@ def test(inputs , sess):
     regr = linear_model.LinearRegression()
 
 # Train the model using the training sets
-    temp = np.reshape(preds , [-1,1])
-    regr.fit(temp, act)
+    #temp = np.reshape(preds , [-1,1])
+    #regr.fit(temp, act)
 
-    preds = [p*float(regr.coef_) + float(regr.intercept_) for p in preds]
+    #preds = [p*float(regr.coef_) + float(regr.intercept_) for p in preds]
 
     for i in range(len(preds)):
 
         print("Prediction" , preds[i]),
         print("Actual" , act[i])
-
+    """
     print(len(y_org_validation))
     print(len(preds))
     for i in range(len(y_org_validation)):
-        print(y_org_validation[i])
-        preds[i] = math.pow(1.5,((preds[i]+5)*y_org_validation[i]))
-        act[i] = math.pow(1.5,(act[i]+5)*y_org_validation[i])
+        preds[i] = math.pow(1.1,(preds[i]/5 * y_org_validation[i]))
+        act[i] = math.pow(1.1,(act[i]/5 * y_org_validation[i]))
 
-
+    """
 
 
     cost = 0
