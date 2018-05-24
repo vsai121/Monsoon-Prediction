@@ -13,7 +13,7 @@ NUM_STEPS = 40#DAYS USED TO MAKE PREDICTION
 LEAD_TIME = 5# PREDICITNG LEAD_TIME DAYS AHEAD
 TRAIN_TEST_RATIO = 0.1
 TRAIN_VALIDATION_RATIO = 0.07
-
+INPUTS = 13
 
 
 def read_csv_file(filename):
@@ -47,12 +47,6 @@ def read_csv_file(filename):
     return rows
 
 
-def normalise_list(raw):
-    norm = [float(i)/sum(raw) for i in raw]
-    norm = [float(i)/max(raw) for i in raw]
-
-    return norm
-
 def normalize_seq(seq):
 
     normalised_seq=[]
@@ -73,27 +67,36 @@ def read_rainfall():
     for row in (data):
         for col in row:
 
-            rainfall.append(float(col)/35 + 1)
+            rainfall.append(math.log(float(col)+2),1.05)
 
     #rainfall = normalise_list(rainfall)
     return rainfall
 
 
-def read_slp():
-    data = read_csv_file('Data/SLP/daily_slp_central_India_1948_2014.csv')
-    slp = []
 
-    prev_col=0
-    """Creating list of SLP data"""
-    for row in (data):
-        for col in row:
+def filename(f):
+    if(f==1):
+        return '_central_India_'
 
-            slp.append(float(col)/10000)
-    #slp = normalise_list(slp)
-    return slp
+    if (f==2):
+        return '_south_India_'
 
-def read_uwind():
-    data = read_csv_file('Data/Uwind/daily_uwnd_central_India_1948_2014.csv')
+    if(f==3):
+        return '_BOB_'
+
+    if(f==4):
+        return '_AS_'
+
+
+def read_uwind(fileNum):
+
+    base = 'Data/Uwind/daily_uwnd'
+    middle = filename(fileNum)
+    end = '1948_2014.csv'
+
+    fileName = base + middle + end
+
+    data = read_csv_file(fileName)
     uwnd = []
 
     """Creating list of Uwind data"""
@@ -105,8 +108,15 @@ def read_uwind():
     #uwnd = normalise_list(uwnd)
     return uwnd
 
-def read_vwind():
-    data = read_csv_file('Data/Vwind/daily_vwnd_central_India_1948_2014.csv')
+
+def read_vwind(fileNum):
+
+    base = 'Data/Vwind/daily_vwnd'
+    middle = filename(fileNum)
+    end = '1948_2014.csv'
+
+    fileName = base + middle + end
+    data = read_csv_file(fileName)
     vwnd = []
 
     """Creating list of Vwind data"""
@@ -118,8 +128,15 @@ def read_vwind():
     #vwnd = normalise_list(vwnd)
     return vwnd
 
-def read_at():
-    data = read_csv_file('Data/AT/daily_at_central_India_1948_2014.csv')
+
+def read_at(fileNum):
+
+    base = "Data/AT/daily_at"
+    middle = filename(fileNum)
+    end = "1948_2014.csv"
+
+    fileName = base + middle + end
+    data = read_csv_file(fileName)
     at = []
 
     """Creating list of Vwind data"""
@@ -134,26 +151,41 @@ def read_at():
 
 
 
-def split_data(input1 , input2 , input3 , input4 , input5, output):
+
+def split_data(input1 , input2 , input3 , input4):
 
     """
     Splits a sequence into windows
     """
+    seq =[i for i in range(INPUTS)]
+    print(seq[0])
 
-    seq1 = [np.array(input1[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
+    seq[0] =  [np.array(input1[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
        for i in range(len(input1) // INPUT_SIZE)]
 
-    seq2 = [np.array(input2[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-       for i in range(len(input2) // INPUT_SIZE)]
+    j = 1
+    for inputs in input2:
 
-    seq3 = [np.array(input3[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-       for i in range(len(input3) // INPUT_SIZE)]
+        seq[j] = [np.array(inputs[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
+           for i in range(len(inputs) // INPUT_SIZE)]
 
-    seq4 = [np.array(input4[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-       for i in range(len(input4) // INPUT_SIZE)]
+        j+=1
 
-    seq5 = [np.array(input5[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-       for i in range(len(input5) // INPUT_SIZE)]
+    for inputs in input3:
+
+        seq[j] = [np.array(inputs[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
+           for i in range(len(inputs) // INPUT_SIZE)]
+
+        j+=1
+
+
+    for inputs in input4:
+
+        seq[j] = [np.array(inputs[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
+           for i in range(len(inputs) // INPUT_SIZE)]
+
+        j+=1
+
 
     """
     print(seq1[0:10])
@@ -163,16 +195,13 @@ def split_data(input1 , input2 , input3 , input4 , input5, output):
 
     """
 
-    seq = []
-
-    for i in range(len(seq1)):
+    sequence = []
+    for i in range(len(seq[0])):
         temp=[]
-        temp.append(seq1[i])
-        temp.append(seq2[i])
-        temp.append(seq3[i])
-        temp.append(seq4[i])
-        temp.append(seq5[i])
-        seq.append(temp)
+        for k in range(INPUTS):
+            temp.append(seq[k][i])
+
+        sequence.append(temp)
 
     #print(seq[0:10])
 
@@ -181,10 +210,10 @@ def split_data(input1 , input2 , input3 , input4 , input5, output):
     y_org=[]
 
 
-    for i in range(len(seq) - NUM_STEPS - LEAD_TIME):
+    for i in range(len(sequence) - NUM_STEPS - LEAD_TIME):
 
         z = []
-        temp = np.array(seq[i: i + NUM_STEPS+LEAD_TIME])
+        temp = np.array(sequence[i: i + NUM_STEPS+LEAD_TIME])
         temp1 = normalize_seq(temp)
         #print(temp1)
         X.append(temp1[0:NUM_STEPS])
@@ -221,22 +250,38 @@ def train_test_split(X , y):
 
 def process():
     rainfall = read_rainfall()
-    slp = read_slp()
-    uwind = read_uwind()
-    vwind = read_vwind()
-    at = read_at()
 
+    uwindCI = read_uwind(1)
+    uwindBOB = read_uwind(2)
+    uwindSI = read_uwind(3)
+    uwindAS = read_uwind(4)
+
+    uwind = [uwindCI , uwindSI , uwindBOB , uwindAS]
+
+    vwindCI = read_vwind(1)
+    vwindSI = read_vwind(2)
+    vwindAS = read_vwind(3)
+    vwindBOB = read_vwind(4)
+
+    vwind = [vwindCI , vwindSI , vwindBOB , vwindAS]
+
+    atCI = read_at(1)
+    atSI = read_at(2)
+    atAS = read_at(3)
+    atBOB = read_at(4)
+
+    at = [atCI , atSI , atBOB , atAS]
     """
     print(len(slp))
     print(len(uwind))
     print(len(vwind))
     """
 
-    X,y  = split_data(rainfall,slp,uwind ,vwind,at,rainfall)
+    X,y  = split_data(rainfall,uwind , vwind , at)
 
 
     y = np.reshape(y , [y.shape[0] , LEAD_TIME])
-    X = np.reshape(X , [X.shape[0] , X.shape[1] , 5])
+    X = np.reshape(X , [X.shape[0] , X.shape[1] , INPUTS])
 
     print(X.shape)
     print(y.shape)
