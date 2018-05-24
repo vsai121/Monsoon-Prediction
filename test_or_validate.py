@@ -13,11 +13,11 @@ from sklearn.metrics import mean_squared_error, r2_score
 import math
 
 
-X_train , y_train ,X_validation , y_validation ,  X_test , y_test , y_org_validation , y_org_test = l.process()
+X_train , y_train ,X_validation , y_validation ,  X_test , y_test  = l.process()
 
 
 
-BATCH_SIZE = 256#BATCH GRADIENT DESCENT FOR TRAINING
+BATCH_SIZE = 256 #BATCH GRADIENT DESCENT FOR TRAINING
 
 def generate_batches(batch_size , X_train , Y_train):
 
@@ -44,14 +44,12 @@ def generate_batches(batch_size , X_train , Y_train):
 
 class RNNConfig():
 
-    input_size=1
-    output_size = 1
+    input_size=5
+    output_size = l.LEAD_TIME
     num_steps=l.NUM_STEPS
-    lstm_size=[80,120]
+    lstm_size=[40,80]
     num_layers=len(lstm_size)
     keep_prob=1
-    batch_size = 64
-
 
 config = RNNConfig()
 
@@ -69,21 +67,6 @@ def weight_variable(shape):
 
 def bias_variable(shape):
     return tf.Variable(tf.constant(0.1, shape=shape))
-
-def create_one_cell(lstm_size):
-
-    return tf.contrib.rnn.LSTMCell(lstm_size, state_is_tuple=True , activation=tf.nn.tanh , forget_bias=0.0)
-
-
-def multiple_layers():
-
-    if config.num_layers >1:
-        cell = tf.contrib.rnn.MultiRNNCell([create_one_cell(config.lstm_size[i]) for i in range(config.num_layers)],state_is_tuple=True)
-
-    else:
-        cell = create_one_cell(config.lstm_size[-1])
-
-    return cell
 
 
 def create_network():
@@ -136,7 +119,7 @@ def test(inputs , sess):
         print("Unable to find network weights")
 
 
-    batches_X , batches_y = generate_batches(BATCH_SIZE , X_validation, y_validation)
+    batches_X , batches_y = generate_batches(BATCH_SIZE , X_test, y_test)
 
     preds = []
     act = []
@@ -159,12 +142,12 @@ def test(inputs , sess):
         for p in pred:
             #print("P")
             #print(p)
-            preds.append(p)
+            preds.append(p[-1])
 
         for a in batch_y:
             #print("a")
             #print(a)
-            act.append(a)
+            act.append(a[-1])
 
     print(min(preds))
     print(max(preds))
@@ -184,14 +167,8 @@ def test(inputs , sess):
 
         print("Prediction" , preds[i]),
         print("Actual" , act[i])
-    """
-    print(len(y_org_validation))
-    print(len(preds))
-    for i in range(len(y_org_validation)):
-        preds[i] = math.pow(1.1,(preds[i]/5 * y_org_validation[i]))
-        act[i] = math.pow(1.1,(act[i]/5 * y_org_validation[i]))
 
-    """
+
 
 
     cost = 0
@@ -219,7 +196,7 @@ def test(inputs , sess):
 
 def process():
 
-    print("Testing  chutiyaxD")
+    print("Testing  hahaxD")
     sess = tf.InteractiveSession()
     inp  = create_placeholders()
     test(inp ,  sess)
