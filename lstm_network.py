@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 import random
-import loader as l
+import loader2 as l
 
 import math
 
@@ -12,7 +12,7 @@ from sklearn.metrics import mean_squared_error, r2_score
 
 #BATCH GRADIENT DESCENT FOR TRAINING
 
-X_train , y_train ,X_validation , y_validation ,  X_test , y_test  = l.process()
+X_train , y_train ,X_validation , y_validation ,  X_test , y_test,_,_,_  = l.process()
 BATCH_SIZE =  256
 
 def generate_batches(batch_size , X_train , Y_train , validation_phase):
@@ -44,14 +44,14 @@ def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
 class RNNConfig():
 
-    input_size=5
-    output_size = l.LEAD_TIME
+    input_size=l.INPUTS
+    output_size = 3
     num_steps=l.NUM_STEPS
-    lstm_size=[40,80]
+    lstm_size=[10,5]
     num_layers=len(lstm_size)
     batch_size = 256
     init_learning_rate = 0.01
-    learning_rate_decay = 0.99
+    learning_rate_decay = 1
     init_epoch = 5
     max_epoch = 1000
 
@@ -69,7 +69,7 @@ def create_placeholders():
     return inputs , targets , learning_rate
 
 def weight_variable(shape):
-    return (0.9*tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
+    return (tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
 
 def bias_variable(shape):
     return tf.Variable(tf.constant(0.1, shape=shape))
@@ -104,13 +104,14 @@ def compute_output(inputs):
 
     last , Why , by = init_params(inputs)
     prediction = tf.matmul(last, Why) + by
+
     return prediction
 
 def compute_loss(prediction , targets , learning_rate):
 
     net = [v for v in tf.trainable_variables()]
     weight_reg = tf.add_n([0.001 * tf.nn.l2_loss(var) for var in net])
-    loss = tf.reduce_mean(tf.abs(prediction - targets)) + weight_reg
+    loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels = targets , logits = prediction))
     #loss = tf.reduce_mean(loss)
     optimizer = tf.train.AdamOptimizer(learning_rate)
     minimize = optimizer.minimize(loss)

@@ -9,11 +9,11 @@ import csv
 import math
 
 INPUT_SIZE = 1
-NUM_STEPS = 200#DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 30# PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 10#DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 1# PREDICITNG LEAD_TIME DAYS AHEAD
 TRAIN_TEST_RATIO = 0.1
 TRAIN_VALIDATION_RATIO = 0.07
-INPUTS = 4
+INPUTS = 10
 
 
 def read_csv_file(filename):
@@ -284,21 +284,21 @@ def process():
     uwindSI = read_uwind(3)
     uwindAS = read_uwind(4)
 
-    uwind = [uwindCI]
+    uwind = [uwindCI , uwindBOB , uwindAS]
 
     vwindCI = read_vwind(1)
     vwindSI = read_vwind(2)
     vwindAS = read_vwind(3)
     vwindBOB = read_vwind(4)
 
-    vwind = [vwindCI]
+    vwind = [vwindCI , vwindBOB , vwindAS]
 
     atCI = read_at(1)
     atSI = read_at(2)
     atAS = read_at(3)
     atBOB = read_at(4)
 
-    at = [atCI]
+    at = [atCI , atBOB , atAS]
     """
     print(len(slp))
     print(len(uwind))
@@ -308,6 +308,13 @@ def process():
     X = split_data(rainfall,uwind , vwind , at)
 
     y = read_rainfall_class()
+    y = y[NUM_STEPS+LEAD_TIME:]
+
+    print(X[0])
+    print(y[0])
+
+    print(X[1])
+    print(y[1])
 
     y = np.reshape(y , [len(y) , 3])
     X = np.reshape(X , [X.shape[0] , X.shape[1] , INPUTS])

@@ -13,7 +13,7 @@ NUM_STEPS = 40#DAYS USED TO MAKE PREDICTION
 LEAD_TIME = 5# PREDICITNG LEAD_TIME DAYS AHEAD
 TRAIN_TEST_RATIO = 0.1
 TRAIN_VALIDATION_RATIO = 0.07
-INPUTS = 13
+INPUTS = 7
 
 
 def read_csv_file(filename):
@@ -47,6 +47,11 @@ def read_csv_file(filename):
     return rows
 
 
+def normalise_list(raw):
+    norm = [float(i)/max(raw) for i in raw]
+
+    return norm
+
 def normalize_seq(seq):
 
     normalised_seq=[]
@@ -67,7 +72,7 @@ def read_rainfall():
     for row in (data):
         for col in row:
 
-            rainfall.append(math.log(float(col)+2),1.05)
+            rainfall.append(float(col)+1)
 
     #rainfall = normalise_list(rainfall)
     return rainfall
@@ -145,7 +150,7 @@ def read_at(fileNum):
 
             at.append(float(col) - 273.15)
 
-    #vwnd = normalise_list(vwnd)
+    #at = normalise_list(at)
     return at
 
 
@@ -235,17 +240,17 @@ def train_test_split(X , y):
     Splitting data into training and test data"
     """
 
-    train_size = int(len(X) * (1.0 - TRAIN_TEST_RATIO))
+    test_size = int(len(X) * (1.0 - TRAIN_TEST_RATIO))
 
-    X_train, X_test = X[:train_size], X[train_size:]
+    X_train, X_test = X[:test_size], X[test_size:]
 
-    y_train, y_test  = y[:train_size], y[train_size:]
+    y_train, y_test  = y[:test_size], y[test_size:]
 
-    train_size = int(len(X_train) * (1- TRAIN_VALIDATION_RATIO))
-    X_train , X_validation = X_train[:train_size] , X_train[train_size:]
-    y_train, y_validation  = y_train[:train_size], y_train[train_size:]
+    validation_size = int(len(X_train) * (1- TRAIN_VALIDATION_RATIO))
+    X_train , X_validation = X_train[:validation_size] , X_train[validation_size:]
+    y_train, y_validation  = y_train[:validation_size], y_train[validation_size:]
 
-    return X_train , y_train , X_validation , y_validation , X_test , y_test
+    return X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size
 
 
 def process():
@@ -256,21 +261,21 @@ def process():
     uwindSI = read_uwind(3)
     uwindAS = read_uwind(4)
 
-    uwind = [uwindCI , uwindSI , uwindBOB , uwindAS]
+    uwind = [uwindCI , uwindBOB]
 
     vwindCI = read_vwind(1)
     vwindSI = read_vwind(2)
     vwindAS = read_vwind(3)
     vwindBOB = read_vwind(4)
 
-    vwind = [vwindCI , vwindSI , vwindBOB , vwindAS]
+    vwind = [vwindCI , vwindBOB]
 
     atCI = read_at(1)
     atSI = read_at(2)
     atAS = read_at(3)
     atBOB = read_at(4)
 
-    at = [atCI , atSI , atBOB , atAS]
+    at = [atCI , atBOB]
     """
     print(len(slp))
     print(len(uwind))
@@ -291,11 +296,11 @@ def process():
     #print(X[1])
     #print(y[0])
     #print(y[1])
-    X_train , y_train , X_validation , y_validation , X_test , y_test  = train_test_split(X,y)
+    X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size = train_test_split(X,y)
 
     print(X_train.shape)
     print(y_train.shape)
-    return X_train , y_train , X_validation , y_validation , X_test , y_test
+    return X_train , y_train , X_validation , y_validation , X_test , y_test , rainfall , test_size , validation_size
 
 
 

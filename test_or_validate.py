@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 import random
-import loader as l
+import loader2 as l
 
 import matplotlib.pyplot as plt
 from scipy import spatial
@@ -13,17 +13,18 @@ from sklearn.metrics import mean_squared_error, r2_score
 import math
 
 
-X_train , y_train ,X_validation , y_validation ,  X_test , y_test  = l.process()
+X_train , y_train ,X_validation , y_validation ,  X_test , y_test , rainfall , test_size , validation_size  = l.process()
 
-
+y_org_validation = rainfall[validation_size:test_size]
+y_org_test = rainfall[test_size:]
 
 BATCH_SIZE = 256 #BATCH GRADIENT DESCENT FOR TRAINING
 
-def generate_batches(batch_size , X_train , Y_train):
+def generate_batches(batch_size , X , Y):
 
-    num_batches = int(len(X_train)) // batch_size
+    num_batches = int(len(X)) // batch_size
 
-    if batch_size * num_batches < len(X_train):
+    if batch_size * num_batches < len(X):
         num_batches += 1
 
 
@@ -34,8 +35,8 @@ def generate_batches(batch_size , X_train , Y_train):
     batches_Y = []
 
     for j in batch_indices:
-        batch_X =  X_train[j * batch_size: (j + 1) * batch_size]
-        batch_y =  Y_train[j * batch_size: (j + 1) * batch_size]
+        batch_X =  X[j * batch_size: (j + 1) * batch_size]
+        batch_y =  Y[j * batch_size: (j + 1) * batch_size]
 
         batches_X.append(batch_X)
         batches_Y.append(batch_y)
@@ -44,10 +45,10 @@ def generate_batches(batch_size , X_train , Y_train):
 
 class RNNConfig():
 
-    input_size=5
-    output_size = l.LEAD_TIME
+    input_size=l.INPUTS
+    output_size = 3
     num_steps=l.NUM_STEPS
-    lstm_size=[40,80]
+    lstm_size=[10 , 5]
     num_layers=len(lstm_size)
     keep_prob=1
 
@@ -119,7 +120,7 @@ def test(inputs , sess):
         print("Unable to find network weights")
 
 
-    batches_X , batches_y = generate_batches(BATCH_SIZE , X_test, y_test)
+    batches_X , batches_y = generate_batches(BATCH_SIZE , X_validation, y_validation)
 
     preds = []
     act = []
@@ -140,22 +141,15 @@ def test(inputs , sess):
 
 
         for p in pred:
-            #print("P")
-            #print(p)
-            preds.append(p[-1])
+            preds.append(np.argmax(p))
 
         for a in batch_y:
-            #print("a")
-            #print(a)
-            act.append(a[-1])
+            act.append(np.argmax(a))
 
-    print(min(preds))
-    print(max(preds))
 
-    print(min(act))
-    print(max(act))
 
-    regr = linear_model.LinearRegression()
+
+    #regr = linear_model.LinearRegression()
 
 # Train the model using the training sets
     #temp = np.reshape(preds , [-1,1])
@@ -163,19 +157,16 @@ def test(inputs , sess):
 
     #preds = [p*float(regr.coef_) + float(regr.intercept_) for p in preds]
 
+    cost = 0
     for i in range(len(preds)):
 
         print("Prediction" , preds[i]),
         print("Actual" , act[i])
 
+        if(preds[i]==act[i]):
+            cost+=1
 
-
-
-    cost = 0
-    for i in range(len (preds)):
-        cost = cost + abs(preds[i] - act[i])
-
-    print(cost)
+    print(float(cost)/len(preds))
     fig = plt.figure()
 
 
