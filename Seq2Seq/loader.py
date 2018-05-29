@@ -9,8 +9,8 @@ import csv
 import math
 
 INPUT_SIZE = 1
-NUM_STEPS = 5#DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 1# PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS =20#DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 15# PREDICITNG LEAD_TIME DAYS AHEAD
 TRAIN_TEST_RATIO = 0.1
 TRAIN_VALIDATION_RATIO = 0.07
 INPUTS = 13
@@ -301,10 +301,10 @@ def process():
     print(y.shape)
 
 
-    #print(X[0])
-    #print(X[1])
-    #print(y[0])
-    #print(y[1])
+    print(X[0])
+    print(X[1])
+    print(y[0])
+    print(y[1])
 
     X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size = train_test_split(X,y)
 
