@@ -18,8 +18,6 @@ X_train , y_train ,X_validation , y_validation ,  X_test , y_test,_,_,_ = l.proc
 
 class RNNConfig():
 
-    learning_rate = 0.0001
-    lambda_l2_reg = 0.001
 
     ## Network Parameters
     # length of input signals
@@ -35,7 +33,7 @@ class RNNConfig():
     input_dim = l.INPUTS
 
     # num of output signals
-    output_dim = 1
+    output_dim = 3
 
     # num of stacked lstm layers
     num_stacked_layers = 2
@@ -58,23 +56,20 @@ def create_placeholders():
 
     return enc_inp , target_seq , dec_inp
 
-def weight_variable(shape):
-    return (tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
-
-def bias_variable(shape):
-    return tf.Variable(tf.constant(0., shape=shape))
-
 
 def create_network():
     cells = []
     for i in range(config.num_stacked_layers):
         with tf.variable_scope('RNN_{}'.format(i)):
-            cells.append(tf.contrib.rnn.LSTMCell(config.hidden_dim))
+            cells.append(tf.contrib.rnn.LSTMCell(config.hidden_dim , activation = tf.nn.relu))
+
+    cells.append(tf.contrib.rnn.LSTMCell(config.output_dim , activation = tf.nn.softmax))
     cell = tf.contrib.rnn.MultiRNNCell(cells)
 
     return cell
 
-def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=None,scope=None):
+
+def _rnn_decoder(decoder_inputs,initial_state,cell, loop_function=None,scope=None):
 
     state = initial_state
     outputs = []
@@ -83,7 +78,7 @@ def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=Non
     for i, inp in enumerate(decoder_inputs):
 
         if loop_function is not None and prev is not None:
-           inp = loop_function(prev, Why , by)
+           inp = loop_function(prev)
 
         if i > 0:
             variable_scope.get_variable_scope().reuse_variables()
@@ -96,30 +91,27 @@ def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=Non
 
     return outputs, state
 
-def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell,Why , by , feed_previous, dtype=dtypes.float32,scope=None):
+def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell,feed_previous, dtype=dtypes.float32,scope=None):
 
     enc_cell = copy.deepcopy(cell)
     _, enc_state = rnn.static_rnn(enc_cell, encoder_inputs, dtype=dtype)
 
     if feed_previous:
-        return _rnn_decoder(decoder_inputs, enc_state, cell, Why , by ,  _loop_function)
+        return _rnn_decoder(decoder_inputs, enc_state, cell,  _loop_function)
     else:
-        return _rnn_decoder(decoder_inputs, enc_state, cell , Why , by)
+        return _rnn_decoder(decoder_inputs, enc_state, cell)
 
-def _loop_function(prev, Why , by):
-    return tf.matmul(prev, Why) + by
+def _loop_function(prev):
+    return prev
 
 
-def build_graph(feed_previous = False):
+def build_graph(feed_previous = True):
 
     print("Building graph")
     tf.reset_default_graph()
 
     global_step = step()
 
-    Why = weight_variable([config.hidden_dim , config.output_dim])
-    by = bias_variable([config.output_dim])
-    print("Weights initialised")
 
     enc_inp , target_seq , dec_inp = create_placeholders()
     print("Placeholders created")
@@ -127,10 +119,10 @@ def build_graph(feed_previous = False):
     cell = create_network()
     print("Network created")
 
-    dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, Why , by , feed_previous=feed_previous)
+    dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, feed_previous=feed_previous)
     print("decoder computed")
 
-    reshaped_outputs = [tf.matmul(i, Why) + by for i in dec_outputs]
+    reshaped_outputs = [i for i in dec_outputs]
     print("Outputs computed")
 
 
@@ -165,7 +157,8 @@ def test():
 
         final_preds = [np.expand_dims(pred, 1) for pred in final_preds]
         final_preds = np.concatenate(final_preds, axis = 1)
-        print("Test mse is: ", np.mean((final_preds - y_validation)**2))
+
+        loss = tf.nn
 
 
 
@@ -186,6 +179,25 @@ def test():
             print("Predicted   %d " , a),
             print("Actual  %d" , b)
 
+
+
+
+        for i in range(len(preds)):
+            preds[i] = np.argmax(preds[i])
+
+        for i in range(len(preds)):
+            act[i] = np.argmax(act[i])
+
+
+        acc=0.
+        count=0.
+        for i in range(len(preds)):
+            if(act[i]!=1):
+                count+=1
+                if(preds[i]==act[i]):
+                    acc+=1
+
+        print(float(acc)/count*100)
 
         line1 = ax1.plot(preds,'bo-',label='list 1')
         line2 = ax1.plot(act,'go-',label='list 2')

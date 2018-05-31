@@ -9,10 +9,10 @@ import csv
 import math
 
 INPUT_SIZE = 1
-NUM_STEPS =20#DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 15# PREDICITNG LEAD_TIME DAYS AHEAD
-TRAIN_TEST_RATIO = 0.1
-TRAIN_VALIDATION_RATIO = 0.07
+NUM_STEPS =15#DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 5# PREDICITNG LEAD_TIME DAYS AHEAD
+TRAIN_TEST_RATIO = 0.03
+TRAIN_VALIDATION_RATIO = 0.03
 INPUTS = 13
 
 
@@ -47,31 +47,34 @@ def read_csv_file(filename):
     return rows
 
 
-def normalise_list(raw):
-    norm = preprocessing.scale(raw)
+def normalise_list(raw , size):
 
+    mean = np.mean(raw[:size])
+    std = np.std(raw[:size])
+
+    norm = [(x - mean)/std for x in raw]
     return norm
 
-def normalize_seq(seq):
 
+def smooth_rainfall(train_data , size):
+    EMA = 0.0
+    gamma = 0.1
 
-    normalised_seq=[]
-    temp=[[] for i in range(len(seq[0]))]
-    for j in range(len(seq[0])):
-        for inp in seq:
-            temp[j].append(inp[j])
+    for ti in range(size):
+        EMA = gamma*train_data[ti] + (1-gamma)*EMA
+        train_data[ti] = EMA
 
-        temp[j] = normalise_list(temp[j])
-        #print(temp[j])
+    return train_data
+def one_hot_encode(x):
 
-    for j in range(len(temp[0])):
-        norm_temp=[]
-        for k in range(len(temp)):
-            norm_temp.append(temp[k][j])
+    if(x==0):
+        return [1 , 0 , 0]
 
-        normalised_seq.append(norm_temp)
-    return normalised_seq
+    if(x==1):
+        return [0 , 1 , 0]
 
+    if(x==2):
+        return [0 , 0 , 1]
 
 def read_rainfall():
     data = read_csv_file('../Data/Rainfall/daily_rainfall_central_India_1948_2014.csv')
@@ -82,6 +85,27 @@ def read_rainfall():
         for col in row:
 
             rainfall.append(float(col))
+
+
+    l = len(rainfall) - NUM_STEPS - LEAD_TIME
+    size = int(int(l*(1 - TRAIN_TEST_RATIO))*(1-TRAIN_VALIDATION_RATIO))
+    print("size" ,size)
+
+    #rainfall = normalise_list(rainfall , size)
+    #rainfall = smooth_rainfall(rainfall , size)
+
+    return rainfall , size
+
+
+def read_rainfall_class():
+    data = read_csv_file('../Data/Rainfall/class_daily_rainfall_central_India_1948_2014.csv')
+    rainfall = []
+
+    """Creating list of rainfall data"""
+    for row in (data):
+        for col in row:
+
+            rainfall.append(one_hot_encode(int(col)))
 
     #rainfall = normalise_list(rainfall)
     return rainfall
@@ -102,7 +126,7 @@ def filename(f):
         return '_AS_'
 
 
-def read_uwind(fileNum):
+def read_uwind(fileNum , size):
 
     base = '../Data/Uwind/daily_uwnd'
     middle = filename(fileNum)
@@ -119,11 +143,11 @@ def read_uwind(fileNum):
 
             uwnd.append(float(col))
 
-    #uwnd = normalise_list(uwnd)
+    uwnd = normalise_list(uwnd , size)
     return uwnd
 
 
-def read_vwind(fileNum):
+def read_vwind(fileNum , size):
 
     base = '../Data/Vwind/daily_vwnd'
     middle = filename(fileNum)
@@ -139,11 +163,11 @@ def read_vwind(fileNum):
 
             vwnd.append(float(col))
 
-    #vwnd = normalise_list(vwnd)
+    vwnd = normalise_list(vwnd , size)
     return vwnd
 
 
-def read_at(fileNum):
+def read_at(fileNum , size):
 
     base = "../Data/AT/daily_at"
     middle = filename(fileNum)
@@ -157,22 +181,21 @@ def read_at(fileNum):
     for row in (data):
         for col in row:
 
-            at.append(float(col) - 273.15)
+            at.append(float(col))
 
-    #at = normalise_list(at)
+    at = normalise_list(at ,size)
     return at
 
 
 
 
 
-def split_data(input1 , input2 , input3 , input4):
+def split_data(input1 , input2 , input3 , input4 , output):
 
     """
     Splits a sequence into windows
     """
     seq =[i for i in range(INPUTS)]
-    print(seq[0])
 
     seq[0] =  [np.array(input1[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
        for i in range(len(input1) // INPUT_SIZE)]
@@ -227,13 +250,13 @@ def split_data(input1 , input2 , input3 , input4):
     for i in range(len(sequence) - NUM_STEPS - LEAD_TIME):
 
         z = []
-        temp = np.array(sequence[i: i + NUM_STEPS+LEAD_TIME])
-        temp1 = normalize_seq(temp)
-        #print(temp1)
+        temp1 = np.array(sequence[i: i + NUM_STEPS+LEAD_TIME])
         X.append(temp1[0:NUM_STEPS])
 
         for j in range(LEAD_TIME):
-            z.append(temp1[NUM_STEPS+j][0])
+            z.append(output[i+NUM_STEPS+j])
+
+        #print("z" , z)
         y.append(z)
         #print("Y" , y)
     X = np.asarray(X , dtype=np.float32)
@@ -263,26 +286,29 @@ def train_test_split(X , y):
 
 
 def process():
-    rainfall = read_rainfall()
+    rainfall, size = read_rainfall()
 
-    uwindCI = read_uwind(1)
-    uwindBOB = read_uwind(2)
-    uwindSI = read_uwind(3)
-    uwindAS = read_uwind(4)
+    plt.plot(rainfall)
+    plt.show()
+
+    uwindCI = read_uwind(1,size)
+    uwindBOB = read_uwind(2,size)
+    uwindSI = read_uwind(3,size)
+    uwindAS = read_uwind(4,size)
 
     uwind = [uwindCI , uwindBOB , uwindAS , uwindSI]
 
-    vwindCI = read_vwind(1)
-    vwindSI = read_vwind(2)
-    vwindAS = read_vwind(3)
-    vwindBOB = read_vwind(4)
+    vwindCI = read_vwind(1,size)
+    vwindSI = read_vwind(2,size)
+    vwindAS = read_vwind(3,size)
+    vwindBOB = read_vwind(4,size)
 
     vwind = [vwindCI , vwindBOB , vwindAS , vwindSI]
 
-    atCI = read_at(1)
-    atSI = read_at(2)
-    atAS = read_at(3)
-    atBOB = read_at(4)
+    atCI = read_at(1,size)
+    atSI = read_at(2,size)
+    atAS = read_at(3,size)
+    atBOB = read_at(4,size)
 
     at = [atCI , atBOB , atAS , atSI]
     """
@@ -291,25 +317,31 @@ def process():
     print(len(vwind))
     """
 
-    X,y  = split_data(rainfall,uwind , vwind , at)
+    rainfall_class = read_rainfall_class()
+
+    X,y = split_data(rainfall,uwind , vwind , at , rainfall_class)
 
 
-    y = np.reshape(y , [y.shape[0] , LEAD_TIME , 1])
+    y = np.reshape(y , [y.shape[0] , LEAD_TIME , 3])
     X = np.reshape(X , [X.shape[0] , X.shape[1] , INPUTS])
 
     print(X.shape)
     print(y.shape)
 
-
+    """
     print(X[0])
     print(X[1])
     print(y[0])
     print(y[1])
+    """
 
     X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size = train_test_split(X,y)
 
+
     print(X_train.shape)
     print(y_train.shape)
+
+
     return X_train , y_train , X_validation , y_validation , X_test , y_test , rainfall , test_size , validation_size
 
 

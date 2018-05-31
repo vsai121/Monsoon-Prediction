@@ -14,6 +14,11 @@ import copy
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test,_,_,_ = l.process()
 
+batch_size = 512
+
+ratio = [1.,1.,1.]
+
+ratio = np.reshape(ratio , [-1,1])
 
 def generate_batches(batch_size , X_train , Y_train):
 
@@ -44,9 +49,9 @@ class RNNConfig():
 
 
     ## Parameters
-    init_learning_rate = 0.01
-    lambda_l2_reg = 0.003
-    max_epoch = 2000
+    init_learning_rate = 0.0001
+    lambda_l2_reg = 0.0003
+    max_epoch = 400
     learning_rate_decay = 0.99
 
     ## Network Parameters
@@ -63,13 +68,11 @@ class RNNConfig():
     input_dim = l.INPUTS
 
     # num of output signals
-    output_dim = 1
+    output_dim = 3
 
     # num of stacked lstm layers
     num_stacked_layers = 2
 
-    # gradient clipping - to avoid gradient exploding
-    GRADIENT_CLIPPING = 2.5
 
 
 
@@ -91,35 +94,28 @@ def create_placeholders():
 
     return enc_inp , target_seq , dec_inp , learning_rate
 
-def weight_variable(shape):
-    return (tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
-
-def bias_variable(shape):
-    return tf.Variable(tf.constant(0., shape=shape))
-
 
 def create_network():
     cells = []
     for i in range(config.num_stacked_layers):
         with tf.variable_scope('RNN_{}'.format(i)):
-            cells.append(tf.contrib.rnn.LSTMCell(config.hidden_dim))
+            cells.append(tf.contrib.rnn.LSTMCell(config.hidden_dim , activation=tf.nn.relu))
+
+    cells.append(tf.contrib.rnn.LSTMCell(config.output_dim , activation = tf.nn.softmax))
     cell = tf.contrib.rnn.MultiRNNCell(cells)
 
     return cell
 
-def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=None,scope=None):
+def _rnn_decoder(decoder_inputs,initial_state,cell, loop_function=None,scope=None):
 
     state = initial_state
     outputs = []
     prev = None
 
+    if loop_function is not None and prev is not None:
+       inp = loop_function(prev)
+
     for i, inp in enumerate(decoder_inputs):
-
-        if loop_function is not None and prev is not None:
-           inp = loop_function(prev, Why , by , i)
-
-        if i > 0:
-            variable_scope.get_variable_scope().reuse_variables()
 
         output, state = cell(inp, state)
         outputs.append(output)
@@ -129,18 +125,18 @@ def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=Non
 
     return outputs, state
 
-def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell,Why , by , feed_previous, dtype=dtypes.float32,scope=None):
+def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell, feed_previous, dtype=dtypes.float32,scope=None):
 
     enc_cell = copy.deepcopy(cell)
     _, enc_state = rnn.static_rnn(enc_cell, encoder_inputs, dtype=dtype)
 
     if feed_previous:
-        return _rnn_decoder(decoder_inputs, enc_state, cell, Why , by ,  _loop_function)
+        return _rnn_decoder(decoder_inputs, enc_state, cell , _loop_function)
     else:
-        return _rnn_decoder(decoder_inputs, enc_state, cell , Why , by)
+        return _rnn_decoder(decoder_inputs, enc_state, cell)
 
-def _loop_function(prev, Why , by):
-    return tf.matmul(prev, Why) + by
+def _loop_function(prev):
+    return prev;
 
 
 def compute_loss(reshaped_outputs , target_seq , learning_rate):
@@ -149,20 +145,24 @@ def compute_loss(reshaped_outputs , target_seq , learning_rate):
     with tf.variable_scope('Loss'):
         # L2 loss
         output_loss = 0
-        for _y, _Y in zip(reshaped_outputs, target_seq):
-            output_loss += tf.reduce_mean(tf.pow(_y - _Y, 2))
+        class_weight = tf.constant(ratio)
+        class_weight = tf.cast(class_weight , tf.float32)
+
+        for y, Y in zip(reshaped_outputs, target_seq):
+            output_loss += tf.reduce_mean(tf.square(y-Y))
 
         # L2 regularization for weights and biases
         reg_loss = 0
         for tf_var in tf.trainable_variables():
-            if 'Biases_' in tf_var.name or 'Weights_' in tf_var.name:
-                reg_loss += tf.reduce_mean(tf.nn.l2_loss(tf_var))
+            reg_loss += tf.reduce_mean(tf.nn.l2_loss(tf_var))
 
         loss = output_loss + config.lambda_l2_reg * reg_loss
 
     with tf.variable_scope('Optimizer' , reuse=tf.AUTO_REUSE):
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        minimize = optimizer.minimize(loss)
+        gvs = optimizer.compute_gradients(loss)
+        capped_gvs = [(tf.clip_by_value(grad, -2.5, 2.5), var) for grad, var in gvs]
+        minimize = optimizer.apply_gradients(capped_gvs)
 
 
     return loss , optimizer , minimize
@@ -178,27 +178,22 @@ def build_graph(feed_previous = False):
 
     global_step = step()
 
-    Why = weight_variable([config.hidden_dim , config.output_dim])
-    by = bias_variable([config.output_dim])
-    print("Weights initialised")
-
     enc_inp , target_seq , dec_inp , learning_rate = create_placeholders()
     print("Placeholders created")
 
     cell = create_network()
     print("Network created")
 
-    dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, Why , by , feed_previous=feed_previous)
+    dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, feed_previous=feed_previous)
     print("decoder computed")
 
-    reshaped_outputs = [tf.matmul(i, Why) + by for i in dec_outputs]
+    reshaped_outputs = [i for i in dec_outputs]
     print("Outputs computed")
 
     loss , optimizer , minimize = compute_loss(reshaped_outputs , target_seq , learning_rate)
     print("Loss computed")
 
-    total_epochs = 100
-    batch_size = 72
+
     train_losses = []
 
 
@@ -209,37 +204,50 @@ def build_graph(feed_previous = False):
 
         sess.run(init)
 
+        checkpoint = tf.train.get_checkpoint_state("saved_networks")
+
+        if checkpoint and checkpoint.model_checkpoint_path:
+            saver.restore(sess, checkpoint.model_checkpoint_path)
+            print("Loaded :", checkpoint.model_checkpoint_path)
+        else:
+            print("Unable to find network weights")
+
+
         print("Training losses: ")
 
         learning_rates = [
         config.init_learning_rate * (
-            math.pow(config.learning_rate_decay , (i))
+            math.pow(config.learning_rate_decay , (i/10))
         ) for i in range(config.max_epoch)]
 
-        for i in range(total_epochs):
+        for epoch_step in range(config.max_epoch):
             total_loss = 0
             avg_loss = 0
+            j = 0
 
             batch_inputs , batch_outputs = generate_batches(batch_size,X_train , y_train)
             for batch_input,batch_output in zip(batch_inputs , batch_outputs):
-                current_lr = learning_rates[i]
+                current_lr = learning_rates[epoch_step]
                 feed_dict = {enc_inp[t]: batch_input[:,t] for t in range(config.input_seq_len)}
                 feed_dict.update({target_seq[t]: batch_output[:,t] for t in range(config.output_seq_len)})
-                feed_dict.update({learning_rate:current_lr})
 
+                feed_dict.update({learning_rate:current_lr})
+                pred = sess.run(reshaped_outputs , feed_dict);
                 loss_t,_ = sess.run([loss , minimize], feed_dict)
                 total_loss += loss_t
                 j+=1
+                #print("pred" , pred[-1])
 
             avg_loss = total_loss/j
 
-            print("Epoch " + str(i))
+            print("Epoch " + str(epoch_step))
             print("Average loss "),
             print(avg_loss)
 
-            saver.save(sess, 'saved_networks/' , global_step = global_step)
+            if epoch_step%10==0:
+                saver.save(sess, 'saved_networks/' , global_step = epoch_step)
 
-            print("Checkpoint saved")
+                print("Checkpoint saved")
 
 
 print("Hello world")
