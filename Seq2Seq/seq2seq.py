@@ -14,7 +14,7 @@ import copy
 
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test,_,_,_ = l.process()
 
-batch_size = 512
+batch_size = 48
 
 ratio = [1.,1.,1.]
 
@@ -49,10 +49,10 @@ class RNNConfig():
 
 
     ## Parameters
-    init_learning_rate = 0.0001
-    lambda_l2_reg = 0.0003
-    max_epoch = 400
-    learning_rate_decay = 0.99
+    init_learning_rate = 0.001
+    lambda_l2_reg = 0.001
+    max_epoch = 40
+    learning_rate_decay = 0.999
 
     ## Network Parameters
     # length of input signals
@@ -71,7 +71,7 @@ class RNNConfig():
     output_dim = 3
 
     # num of stacked lstm layers
-    num_stacked_layers = 2
+    num_stacked_layers = 1
 
 
 
@@ -99,8 +99,8 @@ def create_network():
     cells = []
     for i in range(config.num_stacked_layers):
         with tf.variable_scope('RNN_{}'.format(i)):
-            cells.append(tf.contrib.rnn.LSTMCell(config.hidden_dim , activation=tf.nn.relu))
-
+            cell = tf.contrib.rnn.LSTMCell(config.hidden_dim , activation=tf.nn.leaky_relu)
+            cells.append(tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=0.9))
     cells.append(tf.contrib.rnn.LSTMCell(config.output_dim , activation = tf.nn.softmax))
     cell = tf.contrib.rnn.MultiRNNCell(cells)
 
@@ -145,11 +145,9 @@ def compute_loss(reshaped_outputs , target_seq , learning_rate):
     with tf.variable_scope('Loss'):
         # L2 loss
         output_loss = 0
-        class_weight = tf.constant(ratio)
-        class_weight = tf.cast(class_weight , tf.float32)
 
         for y, Y in zip(reshaped_outputs, target_seq):
-            output_loss += tf.reduce_mean(tf.square(y-Y))
+            output_loss +=  tf.reduce_mean(tf.multiply(Y,-tf.log(y)))
 
         # L2 regularization for weights and biases
         reg_loss = 0
@@ -236,7 +234,7 @@ def build_graph(feed_previous = False):
                 loss_t,_ = sess.run([loss , minimize], feed_dict)
                 total_loss += loss_t
                 j+=1
-                #print("pred" , pred[-1])
+                
 
             avg_loss = total_loss/j
 

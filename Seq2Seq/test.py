@@ -36,7 +36,7 @@ class RNNConfig():
     output_dim = 3
 
     # num of stacked lstm layers
-    num_stacked_layers = 2
+    num_stacked_layers = 1
 
 
 

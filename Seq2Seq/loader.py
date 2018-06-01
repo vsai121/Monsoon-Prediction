@@ -9,11 +9,11 @@ import csv
 import math
 
 INPUT_SIZE = 1
-NUM_STEPS =15#DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 5# PREDICITNG LEAD_TIME DAYS AHEAD
-TRAIN_TEST_RATIO = 0.03
-TRAIN_VALIDATION_RATIO = 0.03
-INPUTS = 13
+NUM_STEPS =5#DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 3# PREDICITNG LEAD_TIME DAYS AHEAD
+TRAIN_TEST_RATIO = 0.05
+TRAIN_VALIDATION_RATIO = 0.05
+INPUTS = 17
 
 
 def read_csv_file(filename):
@@ -87,18 +87,31 @@ def read_rainfall():
             rainfall.append(float(col))
 
 
+    for i in range(1,len(rainfall)-1):
+
+        if(rainfall[i]==1 and rainfall[i-1]!=1 and rainfall[i+1]!=1):
+            rainfall[i] = rainfall[i-1]
+
+        if(rainfall[i]==0 and rainfall[i-1]!=0 and rainfall[i+1]!=0):
+            rainfall[i] = rainfall[i-1]
+
+        if(rainfall[i]==2 and rainfall[i-1]!=2 and rainfall[i+1]!=2):
+            rainfall[i] = rainfall[i-1]
+
+
     l = len(rainfall) - NUM_STEPS - LEAD_TIME
     size = int(int(l*(1 - TRAIN_TEST_RATIO))*(1-TRAIN_VALIDATION_RATIO))
     print("size" ,size)
 
-    #rainfall = normalise_list(rainfall , size)
-    #rainfall = smooth_rainfall(rainfall , size)
+
+    rainfall = normalise_list(rainfall , size)
+    rainfall = smooth_rainfall(rainfall , size)
 
     return rainfall , size
 
 
 def read_rainfall_class():
-    data = read_csv_file('../Data/Rainfall/class_daily_rainfall_central_India_1948_2014.csv')
+    data = read_csv_file('../Data/Rainfall/class4_daily_rainfall_central_India_1948_2014.csv')
     rainfall = []
 
     """Creating list of rainfall data"""
@@ -187,10 +200,27 @@ def read_at(fileNum , size):
     return at
 
 
+def read_pres(fileNum,size):
+
+    base = "../Data/SLP/daily_pres"
+    middle = filename(fileNum)
+    end = "1948_2014.csv"
+
+    fileName = base + middle + end
+    data = read_csv_file(fileName)
+    pres = []
+
+    """Creating list of Vwind data"""
+    for row in (data):
+        for col in row:
+
+            pres.append(float(col))
+
+    pres = normalise_list(pres ,size)
+    return pres
 
 
-
-def split_data(input1 , input2 , input3 , input4 , output):
+def split_data(input1 , input2 , input3 , input4 , input5, output):
 
     """
     Splits a sequence into windows
@@ -222,6 +252,14 @@ def split_data(input1 , input2 , input3 , input4 , output):
            for i in range(len(inputs) // INPUT_SIZE)]
 
         j+=1
+
+    for inputs in input5:
+
+        seq[j] = [np.array(inputs[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
+           for i in range(len(inputs) // INPUT_SIZE)]
+
+        j+=1
+
 
 
     """
@@ -316,10 +354,17 @@ def process():
     print(len(uwind))
     print(len(vwind))
     """
+    presCI = read_pres(1,size)
+    presSI = read_pres(2,size)
+    presAS = read_pres(3,size)
+    presBOB = read_pres(4,size)
+
+
+    pres = [presCI , presBOB , presAS , presSI]
 
     rainfall_class = read_rainfall_class()
 
-    X,y = split_data(rainfall,uwind , vwind , at , rainfall_class)
+    X,y = split_data(rainfall,uwind , vwind , at , pres , rainfall_class)
 
 
     y = np.reshape(y , [y.shape[0] , LEAD_TIME , 3])
