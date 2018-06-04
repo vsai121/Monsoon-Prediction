@@ -2,21 +2,30 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
-
-from sklearn import preprocessing
 import csv
 
 import math
 
-INPUT_SIZE = 1
-NUM_STEPS =5#DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 3# PREDICITNG LEAD_TIME DAYS AHEAD
-TRAIN_TEST_RATIO = 0.05
-TRAIN_VALIDATION_RATIO = 0.05
-INPUTS = 17
+import random
+#Parameters for splitting data
+
+
+NUM_STEPS = 9 #DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 3 # PREDICITNG LEAD_TIME DAYS AHEAD
+
+TRAIN_TEST_RATIO = 0.1
+TRAIN_VALIDATION_RATIO = 0.07
+
+INPUTS = 5 #Number of Variables used
+
 
 
 def read_csv_file(filename):
+
+    """
+    Reading data from file filename
+
+    """
     name = filename
 
     """initializing the rows list"""
@@ -49,6 +58,12 @@ def read_csv_file(filename):
 
 def normalise_list(raw , size):
 
+    """
+
+    Normalising input variables
+    X = (X - mean(X_train)) / stddev(X_train)
+
+    """
     mean = np.mean(raw[:size])
     std = np.std(raw[:size])
 
@@ -58,15 +73,21 @@ def normalise_list(raw , size):
 
 def smooth_rainfall(train_data , size):
     EMA = 0.0
-    gamma = 0.1
+    gamma = 0.5
 
     for ti in range(size):
         EMA = gamma*train_data[ti] + (1-gamma)*EMA
         train_data[ti] = EMA
 
     return train_data
+
+
 def one_hot_encode(x):
 
+    """
+    To one hot encode the three classes of rainfall
+
+    """
     if(x==0):
         return [1 , 0 , 0]
 
@@ -86,31 +107,28 @@ def read_rainfall():
 
             rainfall.append(float(col))
 
+    """
+    To remove cases which have only 1 day of different class
 
-    for i in range(1,len(rainfall)-1):
+    Example - 1 2 1 or 0 1 0
 
-        if(rainfall[i]==1 and rainfall[i-1]!=1 and rainfall[i+1]!=1):
-            rainfall[i] = rainfall[i-1]
-
-        if(rainfall[i]==0 and rainfall[i-1]!=0 and rainfall[i+1]!=0):
-            rainfall[i] = rainfall[i-1]
-
-        if(rainfall[i]==2 and rainfall[i-1]!=2 and rainfall[i+1]!=2):
-            rainfall[i] = rainfall[i-1]
-
+    """
 
     l = len(rainfall) - NUM_STEPS - LEAD_TIME
     size = int(int(l*(1 - TRAIN_TEST_RATIO))*(1-TRAIN_VALIDATION_RATIO))
-    print("size" ,size)
-
+    print("size" ,size)  #Training set size
 
     rainfall = normalise_list(rainfall , size)
-    rainfall = smooth_rainfall(rainfall , size)
+    #rainfall = smooth_rainfall(rainfall , size)
 
     return rainfall , size
 
 
 def read_rainfall_class():
+
+    """
+        Reading class of rainfall
+    """
     data = read_csv_file('../Data/Rainfall/class4_daily_rainfall_central_India_1948_2014.csv')
     rainfall = []
 
@@ -118,7 +136,22 @@ def read_rainfall_class():
     for row in (data):
         for col in row:
 
-            rainfall.append(one_hot_encode(int(col)))
+            rainfall.append((int(col)))
+
+    for i in range(1,len(rainfall)-1):
+
+        if(rainfall[i-1]==1 and rainfall[i+1]==1):
+            rainfall[i]=1
+
+        if(rainfall[i-1]==2 and rainfall[i+1]==2):
+            rainfall[i]=2
+
+        if(rainfall[i-1]==0 and rainfall[i+1]==0):
+            rainfall[i]=0
+
+
+    for i in range(len(rainfall)):
+        rainfall[i] = one_hot_encode(rainfall[i])
 
     #rainfall = normalise_list(rainfall)
     return rainfall
@@ -126,6 +159,13 @@ def read_rainfall_class():
 
 
 def filename(f):
+    """
+        file names of different region variables
+
+        BOB - Bay of Bengal
+        AS - Arabian sea
+
+    """
     if(f==1):
         return '_central_India_'
 
@@ -141,6 +181,9 @@ def filename(f):
 
 def read_uwind(fileNum , size):
 
+    """
+    Reading uwind of different regions
+    """
     base = '../Data/Uwind/daily_uwnd'
     middle = filename(fileNum)
     end = '1948_2014.csv'
@@ -162,6 +205,9 @@ def read_uwind(fileNum , size):
 
 def read_vwind(fileNum , size):
 
+    """
+        Reading Vwind data
+    """
     base = '../Data/Vwind/daily_vwnd'
     middle = filename(fileNum)
     end = '1948_2014.csv'
@@ -182,6 +228,10 @@ def read_vwind(fileNum , size):
 
 def read_at(fileNum , size):
 
+    """
+        Reading Air temperature data
+    """
+
     base = "../Data/AT/daily_at"
     middle = filename(fileNum)
     end = "1948_2014.csv"
@@ -198,6 +248,7 @@ def read_at(fileNum , size):
 
     at = normalise_list(at ,size)
     return at
+
 
 
 def read_pres(fileNum,size):
@@ -219,47 +270,49 @@ def read_pres(fileNum,size):
     pres = normalise_list(pres ,size)
     return pres
 
-
-def split_data(input1 , input2 , input3 , input4 , input5, output):
+def split_data(input1 , input2 , input3 , input4 , input5 , output , size):
 
     """
-    Splits a sequence into windows
+    Splits input data  into windows
+
     """
+
+
     seq =[i for i in range(INPUTS)]
 
-    seq[0] =  [np.array(input1[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-       for i in range(len(input1) // INPUT_SIZE)]
+    #Appending all rainfall data in seq[0]
+    seq[0] =  [np.array(input1[i * 1: (i + 1) * 1])
+       for i in range(len(input1) // 1)]
 
     j = 1
     for inputs in input2:
 
-        seq[j] = [np.array(inputs[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-           for i in range(len(inputs) // INPUT_SIZE)]
+        seq[j] = [np.array(inputs[i * 1: (i + 1) * 1])
+           for i in range(len(inputs) // 1)]
 
         j+=1
 
     for inputs in input3:
 
-        seq[j] = [np.array(inputs[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-           for i in range(len(inputs) // INPUT_SIZE)]
+        seq[j] = [np.array(inputs[i * 1: (i + 1) * 1])
+           for i in range(len(inputs) // 1)]
 
         j+=1
 
 
     for inputs in input4:
 
-        seq[j] = [np.array(inputs[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-           for i in range(len(inputs) // INPUT_SIZE)]
+        seq[j] = [np.array(inputs[i * 1: (i + 1) * 1])
+           for i in range(len(inputs) // 1)]
 
         j+=1
 
     for inputs in input5:
 
-        seq[j] = [np.array(inputs[i * INPUT_SIZE: (i + 1) * INPUT_SIZE])
-           for i in range(len(inputs) // INPUT_SIZE)]
+        seq[j] = [np.array(inputs[i * 1: (i + 1) * 1])
+           for i in range(len(inputs) // 1)]
 
         j+=1
-
 
 
     """
@@ -271,6 +324,15 @@ def split_data(input1 , input2 , input3 , input4 , input5, output):
     """
 
     sequence = []
+    """
+
+    Concantenating values of different variables into a list
+
+    seq = [rainfall , uwind(4) , vwind(4) , air_temperature(4) , pressure(4)]
+
+    (4) - for the 4 regions
+
+    """
     for i in range(len(seq[0])):
         temp=[]
         for k in range(INPUTS):
@@ -282,89 +344,126 @@ def split_data(input1 , input2 , input3 , input4 , input5, output):
 
     X=[]
     y=[]
-    y_org=[]
 
+    """
+    X = [[Day1 variables] , [Day 2 variables]..... [DayNUM_STEPS variables]]
+    y = [DayNUM_STEPS+LEAD_TIME+ rainfall class]
 
+    """
+    new_size=0
     for i in range(len(sequence) - NUM_STEPS - LEAD_TIME):
 
-        z = []
-        temp1 = np.array(sequence[i: i + NUM_STEPS+LEAD_TIME])
+        temp1 = np.array(sequence[i: i + NUM_STEPS])
+
+        new_size += 1
+
         X.append(temp1[0:NUM_STEPS])
+        z=[]
 
         for j in range(LEAD_TIME):
             z.append(output[i+NUM_STEPS+j])
 
-        #print("z" , z)
+
         y.append(z)
-        #print("Y" , y)
+
+        """
+        if(i<size and np.argmax(output[i+NUM_STEPS+LEAD_TIME-1])!=1):
+
+            r = random.uniform(0,1)
+
+            if(r<=0.05):
+                X.append(temp1[0:NUM_STEPS])
+                z=[]
+
+                for j in range(LEAD_TIME):
+                    z.append(output[i+NUM_STEPS+j])
+
+
+                y.append(z)
+                new_size+=1
+
+        """
+
+
+
+
     X = np.asarray(X , dtype=np.float32)
     y = np.asarray(y , dtype=np.float32)
 
-    return X , y
+    return X , y , new_size
 
 
 
-def train_test_split(X , y):
+def train_test_split(X , y ,size):
 
     """
     Splitting data into training and test data"
     """
 
-    test_size = int(len(X) * (1.0 - TRAIN_TEST_RATIO))
+    test_size = int(size * TRAIN_TEST_RATIO)
 
-    X_train, X_test = X[:test_size], X[test_size:]
+    X_test = X[-test_size:]
+    y_test = y[-test_size:]
 
-    y_train, y_test  = y[:test_size], y[test_size:]
+    X_train = X[:-test_size]
+    y_train =  y[:-test_size]
 
-    validation_size = int(len(X_train) * (1- TRAIN_VALIDATION_RATIO))
-    X_train , X_validation = X_train[:validation_size] , X_train[validation_size:]
-    y_train, y_validation  = y_train[:validation_size], y_train[validation_size:]
+    size = size - test_size
+
+    validation_size = int(size * TRAIN_VALIDATION_RATIO)
+
+    X_validation = X_train[-validation_size:]
+    y_validation = y_train[-validation_size:]
+
+    X_train = X_train[:-validation_size]
+    y_train =  y_train[:-validation_size]
 
     return X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size
 
 
 def process():
+
+    """
+    Reading variables
+
+    """
     rainfall, size = read_rainfall()
 
-    plt.plot(rainfall)
-    plt.show()
+    #plt.plot(rainfall)
+    #plt.show()
 
     uwindCI = read_uwind(1,size)
     uwindBOB = read_uwind(2,size)
     uwindSI = read_uwind(3,size)
     uwindAS = read_uwind(4,size)
 
-    uwind = [uwindCI , uwindBOB , uwindAS , uwindSI]
+    uwind = [uwindCI]
 
     vwindCI = read_vwind(1,size)
     vwindSI = read_vwind(2,size)
     vwindAS = read_vwind(3,size)
     vwindBOB = read_vwind(4,size)
 
-    vwind = [vwindCI , vwindBOB , vwindAS , vwindSI]
+    vwind = [vwindCI]
 
     atCI = read_at(1,size)
     atSI = read_at(2,size)
     atAS = read_at(3,size)
     atBOB = read_at(4,size)
 
-    at = [atCI , atBOB , atAS , atSI]
-    """
-    print(len(slp))
-    print(len(uwind))
-    print(len(vwind))
-    """
+    at = [atCI]
+
     presCI = read_pres(1,size)
     presSI = read_pres(2,size)
     presAS = read_pres(3,size)
     presBOB = read_pres(4,size)
 
 
-    pres = [presCI , presBOB , presAS , presSI]
+    pres = [presCI]
 
     rainfall_class = read_rainfall_class()
 
-    X,y = split_data(rainfall,uwind , vwind , at , pres , rainfall_class)
+    X,y,new_size = split_data(rainfall,uwind , vwind , at , pres , rainfall_class , size)
 
 
     y = np.reshape(y , [y.shape[0] , LEAD_TIME , 3])
@@ -373,22 +472,27 @@ def process():
     print(X.shape)
     print(y.shape)
 
-    """
-    print(X[0])
-    print(X[1])
-    print(y[0])
-    print(y[1])
-    """
 
-    X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size = train_test_split(X,y)
+    print("size" , size)
+    X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size = train_test_split(X,y,size)
 
 
     print(X_train.shape)
     print(y_train.shape)
 
+    print(X_validation.shape)
+    print(y_validation.shape)
 
-    return X_train , y_train , X_validation , y_validation , X_test , y_test , rainfall , test_size , validation_size
+    print(X_test.shape)
+    print(y_test.shape)
 
+
+    """
+    Data split into train validation and test
+
+    """
+
+    return X_train , y_train , X_validation , y_validation , X_test , y_test
 
 
 

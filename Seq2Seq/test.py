@@ -13,7 +13,7 @@ from tensorflow.python.ops import variable_scope
 from tensorflow.python.framework import dtypes
 import copy
 
-X_train , y_train ,X_validation , y_validation ,  X_test , y_test,_,_,_ = l.process()
+X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
 
 
 class RNNConfig():
@@ -27,7 +27,7 @@ class RNNConfig():
     output_seq_len = l.LEAD_TIME
 
     # size of LSTM Cell
-    hidden_dim = 64
+    hidden_dim = [40]
 
     # num of input signals
     input_dim = l.INPUTS
@@ -36,7 +36,7 @@ class RNNConfig():
     output_dim = 3
 
     # num of stacked lstm layers
-    num_stacked_layers = 1
+    num_stacked_layers = len(hidden_dim)
 
 
 
@@ -57,19 +57,23 @@ def create_placeholders():
     return enc_inp , target_seq , dec_inp
 
 
+def weight_variable(shape):
+    return (tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
+
+def bias_variable(shape):
+    return tf.Variable(tf.constant(0., shape=shape))
+
+
 def create_network():
     cells = []
     for i in range(config.num_stacked_layers):
         with tf.variable_scope('RNN_{}'.format(i)):
-            cells.append(tf.contrib.rnn.LSTMCell(config.hidden_dim , activation = tf.nn.relu))
-
-    cells.append(tf.contrib.rnn.LSTMCell(config.output_dim , activation = tf.nn.softmax))
+            cells.append(tf.contrib.rnn.LSTMCell(config.hidden_dim[i] , activation=tf.nn.leaky_relu))
     cell = tf.contrib.rnn.MultiRNNCell(cells)
 
     return cell
 
-
-def _rnn_decoder(decoder_inputs,initial_state,cell, loop_function=None,scope=None):
+def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=None,scope=None):
 
     state = initial_state
     outputs = []
@@ -78,7 +82,7 @@ def _rnn_decoder(decoder_inputs,initial_state,cell, loop_function=None,scope=Non
     for i, inp in enumerate(decoder_inputs):
 
         if loop_function is not None and prev is not None:
-           inp = loop_function(prev)
+           inp = loop_function(prev, Why , by)
 
         if i > 0:
             variable_scope.get_variable_scope().reuse_variables()
@@ -91,18 +95,20 @@ def _rnn_decoder(decoder_inputs,initial_state,cell, loop_function=None,scope=Non
 
     return outputs, state
 
-def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell,feed_previous, dtype=dtypes.float32,scope=None):
+def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell,Why , by , feed_previous, dtype=dtypes.float32,scope=None):
 
     enc_cell = copy.deepcopy(cell)
     _, enc_state = rnn.static_rnn(enc_cell, encoder_inputs, dtype=dtype)
 
     if feed_previous:
-        return _rnn_decoder(decoder_inputs, enc_state, cell,  _loop_function)
+        return _rnn_decoder(decoder_inputs, enc_state, cell, Why , by ,  _loop_function)
     else:
-        return _rnn_decoder(decoder_inputs, enc_state, cell)
+        return _rnn_decoder(decoder_inputs, enc_state, cell , Why , by)
 
-def _loop_function(prev):
-    return prev
+def _loop_function(prev, Why , by):
+    return tf.nn.softmax(tf.matmul(prev, Why) + by)
+
+
 
 
 def build_graph(feed_previous = True):
@@ -112,6 +118,9 @@ def build_graph(feed_previous = True):
 
     global_step = step()
 
+    Why = weight_variable([config.hidden_dim[-1] , config.output_dim])
+    by = bias_variable([config.output_dim])
+    print("Weights initialised")
 
     enc_inp , target_seq , dec_inp = create_placeholders()
     print("Placeholders created")
@@ -119,10 +128,10 @@ def build_graph(feed_previous = True):
     cell = create_network()
     print("Network created")
 
-    dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, feed_previous=feed_previous)
+    dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, Why , by , feed_previous=feed_previous)
     print("decoder computed")
 
-    reshaped_outputs = [i for i in dec_outputs]
+    reshaped_outputs = [tf.nn.softmax(tf.matmul(i, Why) + by) for i in dec_outputs]
     print("Outputs computed")
 
 
@@ -152,13 +161,13 @@ def test():
 
         global y_validation
         feed_dict = {rnn_model['enc_inp'][t]: X_validation[:, t, :] for t in range(config.input_seq_len)} # batch prediction
-        feed_dict.update({rnn_model['target_seq'][t]: np.zeros([y_validation.shape[0], config.output_dim], dtype=np.float32) for t in range(config.output_seq_len)})
+        feed_dict.update({rnn_model['target_seq'][t]: y_validation[:,t] for t in range(config.output_seq_len)})
         final_preds = sess.run(rnn_model['reshaped_outputs'], feed_dict)
+
 
         final_preds = [np.expand_dims(pred, 1) for pred in final_preds]
         final_preds = np.concatenate(final_preds, axis = 1)
 
-        loss = tf.nn
 
 
 
@@ -179,9 +188,6 @@ def test():
             print("Predicted   %d " , a),
             print("Actual  %d" , b)
 
-
-
-
         for i in range(len(preds)):
             preds[i] = np.argmax(preds[i])
 
@@ -189,15 +195,31 @@ def test():
             act[i] = np.argmax(act[i])
 
 
-        acc=0.
-        count=0.
+        acc=0
+        count=0
+
         for i in range(len(preds)):
             if(act[i]!=1):
                 count+=1
                 if(preds[i]==act[i]):
                     acc+=1
 
-        print(float(acc)/count*100)
+        print("Active/dry spell accuracy")
+        print(float(acc)/count)*100
+
+
+        acc=0
+        count=0
+        for i in range(len(preds)):
+            if(1):
+                count+=1
+                if(preds[i]==act[i]):
+                    acc+=1
+
+        print("Total accuracy")
+        print(float(acc)/count)*100
+
+
 
         line1 = ax1.plot(preds,'bo-',label='list 1')
         line2 = ax1.plot(act,'go-',label='list 2')
