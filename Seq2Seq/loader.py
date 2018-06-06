@@ -10,13 +10,13 @@ import random
 #Parameters for splitting data
 
 
-NUM_STEPS = 9 #DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 3 # PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 25  #DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 5 # PREDICITNG LEAD_TIME DAYS AHEAD
 
-TRAIN_TEST_RATIO = 0.1
-TRAIN_VALIDATION_RATIO = 0.07
+TRAIN_TEST_RATIO = 0.05
+TRAIN_VALIDATION_RATIO = 0.05
 
-INPUTS = 5 #Number of Variables used
+INPUTS = 13 #Number of Variables used
 
 
 
@@ -366,26 +366,6 @@ def split_data(input1 , input2 , input3 , input4 , input5 , output , size):
 
         y.append(z)
 
-        """
-        if(i<size and np.argmax(output[i+NUM_STEPS+LEAD_TIME-1])!=1):
-
-            r = random.uniform(0,1)
-
-            if(r<=0.05):
-                X.append(temp1[0:NUM_STEPS])
-                z=[]
-
-                for j in range(LEAD_TIME):
-                    z.append(output[i+NUM_STEPS+j])
-
-
-                y.append(z)
-                new_size+=1
-
-        """
-
-
-
 
     X = np.asarray(X , dtype=np.float32)
     y = np.asarray(y , dtype=np.float32)
@@ -437,21 +417,21 @@ def process():
     uwindSI = read_uwind(3,size)
     uwindAS = read_uwind(4,size)
 
-    uwind = [uwindCI]
+    uwind = [uwindCI,uwindBOB,uwindAS]
 
     vwindCI = read_vwind(1,size)
     vwindSI = read_vwind(2,size)
     vwindAS = read_vwind(3,size)
     vwindBOB = read_vwind(4,size)
 
-    vwind = [vwindCI]
+    vwind = [vwindCI,vwindBOB,vwindAS]
 
     atCI = read_at(1,size)
     atSI = read_at(2,size)
     atAS = read_at(3,size)
     atBOB = read_at(4,size)
 
-    at = [atCI]
+    at = [atCI,atAS,atBOB,atSI]
 
     presCI = read_pres(1,size)
     presSI = read_pres(2,size)
@@ -459,7 +439,7 @@ def process():
     presBOB = read_pres(4,size)
 
 
-    pres = [presCI]
+    pres = [presCI,presSI]
 
     rainfall_class = read_rainfall_class()
 
@@ -491,6 +471,12 @@ def process():
     Data split into train validation and test
 
     """
+
+    print(X[0])
+    print(y[0])
+
+    print(X[1])
+    print(y[1])
 
     return X_train , y_train , X_validation , y_validation , X_test , y_test
 

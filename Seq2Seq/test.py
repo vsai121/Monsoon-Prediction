@@ -16,6 +16,8 @@ import copy
 X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
 
 
+ratio = [1,1,1]
+ratio = np.reshape(ratio , [-1,1])
 class RNNConfig():
 
 
@@ -27,7 +29,7 @@ class RNNConfig():
     output_seq_len = l.LEAD_TIME
 
     # size of LSTM Cell
-    hidden_dim = [40]
+    hidden_dim = 80
 
     # num of input signals
     input_dim = l.INPUTS
@@ -36,7 +38,7 @@ class RNNConfig():
     output_dim = 3
 
     # num of stacked lstm layers
-    num_stacked_layers = len(hidden_dim)
+    num_stacked_layers = 1
 
 
 
@@ -67,8 +69,7 @@ def bias_variable(shape):
 def create_network():
     cells = []
     for i in range(config.num_stacked_layers):
-        with tf.variable_scope('RNN_{}'.format(i)):
-            cells.append(tf.contrib.rnn.LSTMCell(config.hidden_dim[i] , activation=tf.nn.leaky_relu))
+        cells.append(tf.contrib.rnn.GRUCell(config.hidden_dim))
     cell = tf.contrib.rnn.MultiRNNCell(cells)
 
     return cell
@@ -105,10 +106,39 @@ def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell,Why , by , feed_previo
     else:
         return _rnn_decoder(decoder_inputs, enc_state, cell , Why , by)
 
+def reshape(dec_outputs , Why , by):
+
+    reshaped_outputs = []
+
+    for i in dec_outputs:
+
+        temp = tf.matmul(i , Why) + by
+        reshaped_outputs.append(temp)
+
+    return reshaped_outputs
+
+
 def _loop_function(prev, Why , by):
-    return tf.nn.softmax(tf.matmul(prev, Why) + by)
+
+    temp= (tf.nn.softmax(tf.matmul(prev, Why) + by))
+    #temp = tf.one_hot(tf.argmax(temp, dimension = 1), depth = 3)
+
+    return temp
+
+def compute_loss(reshaped_outputs , target_seq):
+
+    class_weight = tf.constant(ratio)
+    class_weight = tf.cast(class_weight , tf.float32)
+    # L2 loss
+    output_loss = 0
+    for _y, _Y in zip(reshaped_outputs, target_seq):
+        weight_per_label = tf.transpose(tf.matmul(_Y, (class_weight)) )
+        output_loss += tf.reduce_mean(tf.multiply(weight_per_label,tf.nn.softmax_cross_entropy_with_logits(logits=_y, labels=_Y)))
+        #output_loss+= tf.reduce_mean(tf.square(_Y - _y))
 
 
+
+    return output_loss
 
 
 def build_graph(feed_previous = True):
@@ -118,7 +148,8 @@ def build_graph(feed_previous = True):
 
     global_step = step()
 
-    Why = weight_variable([config.hidden_dim[-1] , config.output_dim])
+
+    Why = weight_variable([config.hidden_dim , config.output_dim])
     by = bias_variable([config.output_dim])
     print("Weights initialised")
 
@@ -131,14 +162,16 @@ def build_graph(feed_previous = True):
     dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, Why , by , feed_previous=feed_previous)
     print("decoder computed")
 
-    reshaped_outputs = [tf.nn.softmax(tf.matmul(i, Why) + by) for i in dec_outputs]
+    reshaped_outputs = reshape(dec_outputs, Why , by)
     print("Outputs computed")
 
+    loss = compute_loss(reshaped_outputs , target_seq)
 
     return dict(
         enc_inp = enc_inp,
         target_seq = target_seq,
         reshaped_outputs = reshaped_outputs,
+        loss=loss,
         )
 
 def test():
@@ -168,8 +201,7 @@ def test():
         final_preds = [np.expand_dims(pred, 1) for pred in final_preds]
         final_preds = np.concatenate(final_preds, axis = 1)
 
-
-
+        loss = sess.run(rnn_model['loss'] , feed_dict)
 
         fig = plt.figure()
         fig.subplots_adjust(bottom=0.2)
@@ -177,12 +209,17 @@ def test():
         ax1 = fig.add_subplot(111)
         preds=[]
         act=[]
+
+
         for pred in final_preds:
             preds.append(pred[-1])
 
 
         for a in y_validation:
             act.append(a[-1])
+
+
+
 
         for a , b in zip(preds , act):
             print("Predicted   %d " , a),
@@ -210,7 +247,7 @@ def test():
 
         acc=0
         count=0
-        for i in range(len(preds)):
+        for i in range(1,len(preds)):
             if(1):
                 count+=1
                 if(preds[i]==act[i]):
@@ -219,7 +256,7 @@ def test():
         print("Total accuracy")
         print(float(acc)/count)*100
 
-
+        print("validation_loss" , loss)
 
         line1 = ax1.plot(preds,'bo-',label='list 1')
         line2 = ax1.plot(act,'go-',label='list 2')
