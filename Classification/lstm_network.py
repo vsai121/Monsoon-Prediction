@@ -7,23 +7,16 @@ import loader2 as l
 import math
 
 
-from tensorflow.contrib import rnn
+from sklearn import datasets, linear_model
+from sklearn.metrics import mean_squared_error, r2_score
 
+#BATCH GRADIENT DESCENT FOR TRAINING
 
-#Loading the train , validation and test data
-X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
-
-
-BATCH_SIZE =  72 # Batch size for batch gradient descent
-
-
+X_train , y_train ,X_validation , y_validation ,  X_test , y_test  = l.process()
+BATCH_SIZE =  250
 
 def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
-    """
-        Generating random mini-batches for batch gradient descent
-
-    """
     num_batches = int(len(X_train)) // batch_size
 
     if batch_size * num_batches < len(X_train):
@@ -51,131 +44,109 @@ def generate_batches(batch_size , X_train , Y_train , validation_phase):
 
 class RNNConfig():
 
-    """
+    input_size=l.INPUTS
+    output_size = l.LEAD_TIME
 
-    Network Hyper-parameters for the model
+    num_steps=l.NUM_STEPS
+    output_dim = 3
 
-    """
-    input_size=l.INPUTS # Number of variables
-    output_size = 3  # 3 for 3 classes
+    lstm_size=[100]
+    num_layers=len(lstm_size)
 
-    num_steps=l.NUM_STEPS #Days used to make prediction
-
-    lstm_size=[40] #Size of LSTM cell
-    dropout = [1]
-    num_layers=len(lstm_size)  #Number of stacked layers in LSTM model
-
-    """
-    Learning Hyper-parameters
-
-    """
-    init_learning_rate = 0.0001  #Initial learning rate
-    learning_rate_decay = 0.99  #Decay of learning rate
-    lamda = 0.001
-    max_epoch = 2000  #Total epochs
-
+    init_learning_rate = 0.001
+    learning_rate_decay = 0.99
+    init_epoch = 5
+    max_epoch = 200
 
 config = RNNConfig()
 
+import tensorflow as tf
 tf.reset_default_graph()
 lstm_graph = tf.Graph()
 
 def create_placeholders():
 
-    """
-    Creating placeholders for input , output and learning rate
-
-    """
     inputs = tf.placeholder(dtype= tf.float32, shape = [None, config.num_steps, config.input_size])
-    targets = tf.placeholder(dtype = tf.float32, shape = [None, config.output_size])
+    targets = tf.placeholder(dtype = tf.float32, shape = [None, config.output_size , config.output_dim ])
     learning_rate = tf.placeholder(dtype=tf.float32, shape=None)
 
     return inputs , targets , learning_rate
 
-def create_network():
+def weight_variable(shape):
+    return (tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
 
-    """
-    Create LSTM model
-    """
+def bias_variable(shape):
+    return tf.Variable(tf.constant(0., shape=shape))
+
+
+def create_network():
     cells = []
     for i in range(config.num_layers):
-        cell = tf.contrib.rnn.LSTMCell(config.lstm_size[i] , activation=tf.nn.relu)  # Or LSTMCell(num_units)
-        cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=config.dropout[i])
+        cell = tf.contrib.rnn.LSTMCell(config.lstm_size[i])  # Or LSTMCell(num_units)
         cells.append(cell)
-
-    """
-
-    Append softmax layer to end for classification
-
-    """
-
-    cells.append( tf.contrib.rnn.LSTMCell(config.output_size , activation=tf.nn.softmax))
 
     cell = tf.contrib.rnn.MultiRNNCell(cells)
     return cell
 
 def init_params(inputs):
-    """
-    Calling network with inputs to get output
-    """
     cell = create_network()
     val,_ = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32)
-
-    #print(val.shape)
     val = tf.transpose(val, [1, 0, 2])
-    last = tf.gather(val, int(val.get_shape()[0]) - 1, name="last_lstm_output")
+    outputs = []
+    #print(val.shape)
+    for i in range(config.output_size):
+
+        last = tf.gather(val, int(val.get_shape()[0]) - 1, name="last_lstm_output")
+        outputs.append(last)
+    #weight and bias between hidden and output layer
+    Why = weight_variable([config.lstm_size[-1] , config.output_dim])
+    by = bias_variable([config.output_dim])
 
 
-    return last
+    return outputs , Why , by
 
 def compute_output(inputs):
 
-    """
-    Computing output (no changes for classification)
-    """
-    last  = init_params(inputs)
-    prediction = last
+    outputs , Why , by = init_params(inputs)
+    print("outputs" , outputs)
 
+    prediction = []
+    for i in range(config.output_size):
+        prediction.append(tf.add(tf.matmul(outputs[i] , Why),by))
+
+    print("prediction" , prediction)
     return prediction
 
 def compute_loss(prediction , targets , learning_rate):
 
-    """
-    Compute loss
-    """
-
-    """
-    L2 regularization loss for avoiding overfitting
-    """
     net = [v for v in tf.trainable_variables()]
     weight_reg = (tf.add_n([0.001 * tf.nn.l2_loss(var) for var in net]))
 
-    """
-    Softmax loss  = -1*target*log(prediction)
-    """
-    output_loss = 0
-    output_loss +=  tf.reduce_mean(tf.multiply(targets,-tf.log(prediction)))
+    all_steps_cost = 0
+    last_step_cost=0
 
-    """
-    Adding the L2 regularization loss
-    """
+    for t in range(len(prediction)):
 
-    loss = output_loss + config.lamda * weight_reg
+        y = prediction[t]
+        Y = targets[:,t,:]
 
+        print(y)
+        print(Y)
+        all_steps_cost += tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=Y,logits=y))
 
-    """
-    Using adam optimizer
-    """
+        if(Y==targets[-1]):
+            last_step_cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=Y,logits=y))
+
+    output_loss = 0.5 * all_steps_cost + (0.5) * last_step_cost
+
+    loss = output_loss  +  weight_reg
+
     optimizer = tf.train.AdamOptimizer(learning_rate)
     minimize = optimizer.minimize(loss)
 
     return loss , optimizer , minimize
 
 def train(inputs , targets , learning_rate , sess):
-
-    """
-        Training process
-    """
 
     prediction = compute_output(inputs)
     loss , optimizer , minimize = compute_loss(prediction , targets , learning_rate)
@@ -184,14 +155,6 @@ def train(inputs , targets , learning_rate , sess):
     init = tf.global_variables_initializer()
     sess.run(init)
 
-    """
-    Checking for already saved weights.
-
-    If found will resume with those weights
-
-    Else start from beginning
-
-    """
     checkpoint = tf.train.get_checkpoint_state("saved_networks")
 
     if checkpoint and checkpoint.model_checkpoint_path:
@@ -200,19 +163,10 @@ def train(inputs , targets , learning_rate , sess):
     else:
         print("Unable to find network weights")
 
-
-    """
-    Computes decaying learning rate at each step
-    learning rate(timestep t) = initital leaning rate * (decay_factor^t)
-
-    """
-
     learning_rates = [
     config.init_learning_rate * (
         math.pow(config.learning_rate_decay , (i))
     ) for i in range(config.max_epoch)]
-
-
 
 
     predictions = []
@@ -223,34 +177,20 @@ def train(inputs , targets , learning_rate , sess):
         current_lr = learning_rates[epoch_step]
         total_loss = 0
         j = 0
-
-        """
-        batches _X and batches_Y are random shuffled batches of X_TRAIN AND Y_TRAIN
-        """
         batches_X , batches_y = generate_batches(BATCH_SIZE , X_train , y_train , 0)
 
 
         for batch_X, batch_y in zip(batches_X, batches_y):
 
-            """
-            Computes loss for each batch
-
-            """
             train_data_feed = {
                 inputs: batch_X,
                 targets: batch_y,
                 learning_rate: current_lr
             }
-
-
-            """
-            Printing to check if prediction and loss are being computed correctly
-            """
-
             #print(batch_X , batch_y)
             #print("batch_X" , batch_X)
-            #print("batch_y" , batch_y)
-            #pred = sess.run(prediction ,  train_data_feed)
+            #Wprint("batch_y" , batch_y)
+            pred = sess.run(prediction ,  train_data_feed)
             #print("prediction" , pred)
 
             train_loss, _ = sess.run([loss, minimize], train_data_feed)
@@ -268,22 +208,14 @@ def train(inputs , targets , learning_rate , sess):
 
         #print("\n\n\n\n\n")
 
-        """
-        Saves state of model every 10 epochs in saved_networks/ folder
-
-        """
-        if epoch_step%10==0:
+        if epoch_step%5==0:
             print("Saving state")
             saver = tf.train.Saver()
             saver.save(sess, 'saved_networks/' , global_step = epoch_step)
             #t.test(inputs , prediction ,  sess , saver)
 
 if __name__== "__main__":
-
-    """
-    Calling tthe training process
-    """
-
+    print("multiple features haha chutiya 128 xD")
     sess = tf.InteractiveSession()
     inp , output , learning_rate = create_placeholders()
     train(inp , output , learning_rate , sess)

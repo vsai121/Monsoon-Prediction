@@ -6,16 +6,22 @@ import csv
 
 import math
 
+import random
+
 #Parameters for splitting data
 
 
-NUM_STEPS =3  #DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 1  # PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 15  #DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 5 # PREDICITNG LEAD_TIME DAYS AHEAD
 
-TRAIN_TEST_RATIO = 0.05
-TRAIN_VALIDATION_RATIO = 0.05
+TRAIN_TEST_RATIO = 0.02
+TRAIN_VALIDATION_RATIO = 0.08
 
-INPUTS = 17 #Number of Variables used
+INPUTS= 5 #Number of Variables used
+
+WINDOW=51
+
+FREQ = 1./25
 
 
 
@@ -70,15 +76,6 @@ def normalise_list(raw , size):
     return norm
 
 
-def smooth_rainfall(train_data , size):
-    EMA = 0.0
-    gamma = 0.5
-
-    for ti in range(size):
-        EMA = gamma*train_data[ti] + (1-gamma)*EMA
-        train_data[ti] = EMA
-
-    return train_data
 
 
 def one_hot_encode(x):
@@ -106,20 +103,13 @@ def read_rainfall():
 
             rainfall.append(float(col))
 
-    """
-    To remove cases which have only 1 day of different class
 
-    Example - 1 2 1 or 0 1 0
-
-    """
 
     l = len(rainfall) - NUM_STEPS - LEAD_TIME
     size = int(int(l*(1 - TRAIN_TEST_RATIO))*(1-TRAIN_VALIDATION_RATIO))
     print("size" ,size)  #Training set size
 
     rainfall = normalise_list(rainfall , size)
-    #rainfall = smooth_rainfall(rainfall , size)
-
     return rainfall , size
 
 
@@ -269,7 +259,7 @@ def read_pres(fileNum,size):
     pres = normalise_list(pres ,size)
     return pres
 
-def split_data(input1 , input2 , input3 , input4 , input5 , output):
+def split_data(input1 , input2 , input3 , input4 , input5 , output , size):
 
     """
     Splits input data  into windows
@@ -349,39 +339,53 @@ def split_data(input1 , input2 , input3 , input4 , input5 , output):
     y = [DayNUM_STEPS+LEAD_TIME+ rainfall class]
 
     """
+    new_size=0
     for i in range(len(sequence) - NUM_STEPS - LEAD_TIME):
 
-        z = []
         temp1 = np.array(sequence[i: i + NUM_STEPS])
+
+        new_size += 1
+
         X.append(temp1[0:NUM_STEPS])
+        z=[]
 
-        z.append(output[i+NUM_STEPS+LEAD_TIME-1])
+        for j in range(LEAD_TIME):
+            z.append(output[i+NUM_STEPS+j])
 
-        #print("z" , z)
+
         y.append(z)
-        #print("Y" , y)
+
+
     X = np.asarray(X , dtype=np.float32)
     y = np.asarray(y , dtype=np.float32)
 
-    return X , y
+    return X , y , new_size
 
 
 
-def train_test_split(X , y):
+def train_test_split(X , y ,size):
 
     """
     Splitting data into training and test data"
     """
 
-    test_size = int(len(X) * (1.0 - TRAIN_TEST_RATIO))
+    test_size = int(size * TRAIN_TEST_RATIO)
 
-    X_train, X_test = X[:test_size], X[test_size:]
+    X_test = X[-test_size:]
+    y_test = y[-test_size:]
 
-    y_train, y_test  = y[:test_size], y[test_size:]
+    X_train = X[:-test_size]
+    y_train =  y[:-test_size]
 
-    validation_size = int(len(X_train) * (1- TRAIN_VALIDATION_RATIO))
-    X_train , X_validation = X_train[:validation_size] , X_train[validation_size:]
-    y_train, y_validation  = y_train[:validation_size], y_train[validation_size:]
+    size = size - test_size
+
+    validation_size = int(size * TRAIN_VALIDATION_RATIO)
+
+    X_validation = X_train[-validation_size:]
+    y_validation = y_train[-validation_size:]
+
+    X_train = X_train[:-validation_size]
+    y_train =  y_train[:-validation_size]
 
     return X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size
 
@@ -402,21 +406,21 @@ def process():
     uwindSI = read_uwind(3,size)
     uwindAS = read_uwind(4,size)
 
-    uwind = [uwindCI , uwindBOB , uwindAS , uwindSI]
+    uwind = [uwindCI]
 
     vwindCI = read_vwind(1,size)
     vwindSI = read_vwind(2,size)
     vwindAS = read_vwind(3,size)
     vwindBOB = read_vwind(4,size)
 
-    vwind = [vwindCI , vwindBOB , vwindAS , vwindSI]
+    vwind = [vwindCI]
 
     atCI = read_at(1,size)
     atSI = read_at(2,size)
     atAS = read_at(3,size)
     atBOB = read_at(4,size)
 
-    at = [atCI , atBOB , atAS , atSI]
+    at = [atCI]
 
     presCI = read_pres(1,size)
     presSI = read_pres(2,size)
@@ -424,42 +428,46 @@ def process():
     presBOB = read_pres(4,size)
 
 
-    pres = [presCI , presBOB , presAS , presSI]
-
+    pres = [presCI]
     rainfall_class = read_rainfall_class()
 
-    X,y = split_data(rainfall,uwind , vwind , at , pres , rainfall_class)
+    X,y,new_size = split_data(rainfall,uwind , vwind , at , pres , rainfall_class , size)
 
 
-    y = np.reshape(y , [y.shape[0] , 3])
+    y = np.reshape(y , [y.shape[0] , LEAD_TIME , 3])
     X = np.reshape(X , [X.shape[0] , X.shape[1] , INPUTS])
 
     print(X.shape)
     print(y.shape)
 
 
-    """
-    Checking if X and y have been split correctly
-
-    print(X[0])
-    print(X[1])
-    print(y[0])
-    print(y[1])
-
-
-    """
-
-    X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size = train_test_split(X,y)
+    print("size" , size)
+    X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size = train_test_split(X,y,size)
 
 
     print(X_train.shape)
     print(y_train.shape)
 
+    print(X_validation.shape)
+    print(y_validation.shape)
+
+    print(X_test.shape)
+    print(y_test.shape)
+
+
     """
     Data split into train validation and test
 
     """
+    """
+    print(X[0])
+    print(y[0])
 
+    print(X[1])
+    print(y[1])
+
+    print(y[2:10])
+    """
     return X_train , y_train , X_validation , y_validation , X_test , y_test
 
 
