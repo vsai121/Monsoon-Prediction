@@ -7,17 +7,17 @@ import csv
 import math
 
 import random
+
 #Parameters for splitting data
 
 
-NUM_STEPS = 25  #DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 5 # PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 20 #DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 10 # PREDICITNG LEAD_TIME DAYS AHEAD
 
-TRAIN_TEST_RATIO = 0.05
-TRAIN_VALIDATION_RATIO = 0.05
+TRAIN_TEST_RATIO = 0.02
+TRAIN_VALIDATION_RATIO = 0.08
 
-INPUTS = 13 #Number of Variables used
-
+INPUTS= 9 #Number of Variables used
 
 
 def read_csv_file(filename):
@@ -71,15 +71,6 @@ def normalise_list(raw , size):
     return norm
 
 
-def smooth_rainfall(train_data , size):
-    EMA = 0.0
-    gamma = 0.5
-
-    for ti in range(size):
-        EMA = gamma*train_data[ti] + (1-gamma)*EMA
-        train_data[ti] = EMA
-
-    return train_data
 
 
 def one_hot_encode(x):
@@ -107,20 +98,13 @@ def read_rainfall():
 
             rainfall.append(float(col))
 
-    """
-    To remove cases which have only 1 day of different class
 
-    Example - 1 2 1 or 0 1 0
-
-    """
 
     l = len(rainfall) - NUM_STEPS - LEAD_TIME
     size = int(int(l*(1 - TRAIN_TEST_RATIO))*(1-TRAIN_VALIDATION_RATIO))
     print("size" ,size)  #Training set size
 
     rainfall = normalise_list(rainfall , size)
-    #rainfall = smooth_rainfall(rainfall , size)
-
     return rainfall , size
 
 
@@ -417,21 +401,21 @@ def process():
     uwindSI = read_uwind(3,size)
     uwindAS = read_uwind(4,size)
 
-    uwind = [uwindCI,uwindBOB,uwindAS]
+    uwind = [uwindCI]
 
     vwindCI = read_vwind(1,size)
     vwindSI = read_vwind(2,size)
     vwindAS = read_vwind(3,size)
     vwindBOB = read_vwind(4,size)
 
-    vwind = [vwindCI,vwindBOB,vwindAS]
+    vwind = [vwindCI]
 
     atCI = read_at(1,size)
     atSI = read_at(2,size)
     atAS = read_at(3,size)
     atBOB = read_at(4,size)
 
-    at = [atCI,atAS,atBOB,atSI]
+    at = [atCI,atSI,atBOB,atAS]
 
     presCI = read_pres(1,size)
     presSI = read_pres(2,size)
@@ -440,7 +424,6 @@ def process():
 
 
     pres = [presCI,presSI]
-
     rainfall_class = read_rainfall_class()
 
     X,y,new_size = split_data(rainfall,uwind , vwind , at , pres , rainfall_class , size)
@@ -477,6 +460,8 @@ def process():
 
     print(X[1])
     print(y[1])
+
+    print(y[2:30])
 
     return X_train , y_train , X_validation , y_validation , X_test , y_test
 
