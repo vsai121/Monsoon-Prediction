@@ -12,11 +12,13 @@ from tensorflow.python.ops import variable_scope
 from tensorflow.python.framework import dtypes
 import copy
 
-X_train , y_train ,X_validation , y_validation ,  X_test , y_test = l.process()
+
+
+X_train , y_train ,  X_test , y_test = l.process()
 
 batch_size = 256
 
-ratio = [1,1,1]
+ratio = [1.4,1,1.4]
 
 ratio = np.reshape(ratio , [-1,1])
 
@@ -28,7 +30,7 @@ def generate_batches(batch_size , X_train , Y_train):
     num_batches = int(len(X_train)) // batch_size
 
     if(num_batches*batch_size< len(X_train)):
-        num_batches+=0
+        num_batches+=1
 
     batch_indices = range(num_batches)
 
@@ -47,11 +49,12 @@ def generate_batches(batch_size , X_train , Y_train):
 
     return batches_X , batches_Y
 
+
 class RNNConfig():
 
 
     ## Parameters
-    init_learning_rate = 0.001
+    init_learning_rate = 0.0003
     lambda_l2_reg = 0.0001
     max_epoch = 301
     learning_rate_decay = 0.99
@@ -66,7 +69,7 @@ class RNNConfig():
     # size of LSTM Cell
     hidden_dim = 80
 
-    dropout= [0]
+    dropout= [1]
     # num of input signals
     input_dim = l.INPUTS
 
@@ -98,60 +101,36 @@ def create_placeholders():
     return enc_inp , target_seq , dec_inp , learning_rate , dropout
 
 def weight_variable(shape):
-    return (tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
+    return tf.get_variable("proj_w_out",
+    [config.hidden_dim, config.output_dim],dtype=tf.float32,initializer=tf.random_uniform_initializer(minval=-0.04, maxval=0.04))
 
 def bias_variable(shape):
-    return tf.Variable(tf.constant(0., shape=shape))
+    return tf.get_variable("proj_b_out",
+        [config.output_dim],dtype=tf.float32,initializer=tf.random_uniform_initializer(minval=-0.04, maxval=0.04))
 
-def encoder_network(dropout):
+
+def create_network(dropout):
     cells = []
-    for i in range(config.num_stacked_layers):
 
-        lstm_cell = tf.contrib.rnn.LSTMCell(config.hidden_dim)
-        cells.append(lstm_cell)
+    cell = tf.contrib.rnn.LSTMCell(config.hidden_dim)
+    cells.append(cell)
 
+    for j in range(1,config.num_stacked_layers):
+        cell = tf.contrib.rnn.LSTMCell(config.hidden_dim)
+        #cell = tf.contrib.rnn.ResidualWrapper(cell)
+        cell = tf.contrib.rnn.DropoutWrapper(cell , output_keep_prob=dropout[j])
+        cells.append(cell)
 
     cell = tf.contrib.rnn.MultiRNNCell(cells)
 
     return cell
 
-def decoder_network(attention_mechanism):
+def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=None,scope=None):
 
-    lstm_cell = tf.contrib.rnn.LSTMCell(config.hidden_dim)
-
-
-    decoder_cell = tf.contrib.seq2seq.AttentionWrapper(
-        lstm_cell, attention_mechanism=attention_mechanism,
-        attention_layer_size=config.hidden_dim)
-
-
-    return decoder_cell
-
-def _rnn_decoder(decoder_inputs,initial_state, attention_mechanism , Why , by , loop_function=None,scope=None):
-
+    state = initial_state
     outputs = []
     prev = None
 
-    cell = decoder_network(attention_mechanism)
-
-    state = cell.zero_state(batch_size=batch_size,dtype=tf.float32).clone(cell_state=initial_state[0])
-
-
-    seq_lengths = tf.constant(config.output_seq_len,shape=[batch_size])
-
-    helper = tf.contrib.seq2seq.TrainingHelper(
-    decoder_inputs, seq_lengths, time_major=True)
-
-    # Decoder
-    decoder = tf.contrib.seq2seq.BasicDecoder(
-    cell, helper,state)
-
-    print("Decoder done")
-    outputs, state,_ = tf.contrib.seq2seq.dynamic_decode(decoder)
-
-    print("Outputs",outputs)
-    
-    """
     for i, inp in enumerate(decoder_inputs):
 
         if loop_function is not None and prev is not None:
@@ -160,32 +139,25 @@ def _rnn_decoder(decoder_inputs,initial_state, attention_mechanism , Why , by , 
         if i > 0:
             variable_scope.get_variable_scope().reuse_variables()
 
-        output,state = cell(inp, state=state)
+        output, state = cell(inp, state)
         outputs.append(output)
 
 
         if loop_function is not None:
             prev = output
-    """
-    return outputs[0], state
+
+    return outputs, state
 
 def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell,Why , by , feed_previous, dtype=dtypes.float32,scope=None):
 
     enc_cell = copy.deepcopy(cell)
+
     outputs, enc_state = rnn.static_rnn(enc_cell, encoder_inputs, dtype=dtype)
 
-    enc_outputs = tf.stack(outputs)
-
-    attention_states = tf.transpose(enc_outputs, [1, 0, 2])
-
-    attention_mechanism = tf.contrib.seq2seq.LuongAttention(
-                            num_units=config.hidden_dim, memory =attention_states)
-
     if feed_previous:
-        return _rnn_decoder(decoder_inputs, enc_state, attention_mechanism , Why , by ,_loop_function)
+        return _rnn_decoder(decoder_inputs, enc_state, cell, Why , by ,_loop_function)
     else:
-        return _rnn_decoder(decoder_inputs, enc_state , attention_mechanism , Why , by)
-
+        return _rnn_decoder(decoder_inputs, enc_state, cell , Why , by)
 
 def reshape(dec_outputs , Why , by):
 
@@ -194,9 +166,8 @@ def reshape(dec_outputs , Why , by):
     for j in range(config.output_seq_len):
 
         print("j",j)
-        i = dec_outputs[:,j,:]
-
-        temp = (tf.add(tf.matmul(i , Why),by))
+        i = dec_outputs[j]
+        temp = tf.matmul(i,Why)+by
         reshaped_outputs.append(temp)
 
         last_outputs = temp
@@ -235,16 +206,26 @@ def compute_loss(reshaped_outputs , last_outputs,target_seq , learning_rate):
         for tf_var in tf.trainable_variables():
             reg_loss += tf.reduce_mean(tf.nn.l2_loss(tf_var))
 
-        loss = output_loss  + config.lambda_l2_reg* reg_loss
+        loss = output_loss + config.lambda_l2_reg* reg_loss
+
 
     with tf.variable_scope('Optimizer' , reuse=tf.AUTO_REUSE):
-        optimizer = tf.train.AdamOptimizer(learning_rate)
-        minimize = optimizer.minimize(loss)
 
+        optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate)
+
+        gvs = optimizer.compute_gradients(loss)
+        capped_gvs = [(tf.clip_by_value(grad, -5., 5.), var) for grad, var in gvs]
+
+        minimize = optimizer.apply_gradients(capped_gvs)
 
     return loss , optimizer , minimize
 
+def _loop_function(prev, Why , by):
 
+    temp = tf.add(tf.matmul(prev,Why),by)
+    one_hot = tf.one_hot(tf.argmax(temp, dimension = 1), depth = 3)
+
+    return one_hot
 
 
 
@@ -262,13 +243,13 @@ def build_train_graph(feed_previous = False):
     enc_inp , target_seq , dec_inp , learning_rate , dropout = create_placeholders()
     print("Placeholders created")
 
-    cell = encoder_network(dropout)
+    cell = create_network(dropout)
     print("Encoder created")
 
     dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, Why , by , feed_previous=feed_previous)
     print("decoder computed")
 
-    reshaped_outputs,last_outputs = reshape(dec_outputs , Why , by)
+    reshaped_outputs , last_outputs = reshape(dec_outputs, Why , by)
     print("Outputs computed")
 
     loss , optimizer , minimize = compute_loss(reshaped_outputs , last_outputs,target_seq , learning_rate)
@@ -277,7 +258,7 @@ def build_train_graph(feed_previous = False):
     return dict(
         enc_inp = enc_inp,
         target_seq = target_seq,
-        reshaped_outputs = reshaped_outputs,
+        reshaped_outputs = dec_outputs,
         loss = loss,
         learning_rate=learning_rate,
         dropout=dropout,
@@ -292,7 +273,7 @@ def train():
     total_epochs = config.max_epoch
     train_losses = []
 
-    rnn_model = build_train_graph(feed_previous=False)
+    rnn_model = build_train_graph(feed_previous=True)
 
     saver = tf.train.Saver()
 
@@ -356,8 +337,8 @@ def train():
 
                 train_loss.append(avg_loss)
 
-                batch_inputs , batch_outputs = generate_batches(batch_size,X_validation , y_validation)
-                loss_v = 0
+                batch_inputs , batch_outputs = generate_batches(batch_size,X_test , y_test)
+                loss_test = 0
                 j=0
                 for batch_input,batch_output in zip(batch_inputs , batch_outputs):
 
@@ -367,10 +348,11 @@ def train():
                     dropout = [1 for i in range(config.num_stacked_layers)]
                     feed_dict.update({rnn_model['dropout']:dropout})
                     j+=1
-                    loss_v += sess.run(rnn_model['loss'], feed_dict)
+                    loss_test += sess.run(rnn_model['loss'], feed_dict)
+
+                print("Test loss" , loss_test/j)
 
 
-                print("Validation loss" , loss_v/j)
 
 if __name__=='__main__':
     train()

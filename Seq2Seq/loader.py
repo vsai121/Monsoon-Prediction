@@ -8,16 +8,39 @@ import math
 
 import random
 
+
+
 #Parameters for splitting data
 
 
-NUM_STEPS = 20 #DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 10 # PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 8 #DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 3 # PREDICITNG LEAD_TIME DAYS AHEAD
 
-TRAIN_TEST_RATIO = 0.02
-TRAIN_VALIDATION_RATIO = 0.08
+TRAIN_TEST_RATIO = 0.1
 
-INPUTS= 9 #Number of Variables used
+INPUTS= 7 #Number of Variables used
+
+freq = 1./5  # Hours
+window_size = 51
+pad = np.zeros(window_size) * np.NaN
+
+def lanc(numwt, haf):
+
+    summ = 0
+    numwt += 1
+    wt = np.zeros(numwt)
+
+    # Filter weights.
+    ii = np.arange(numwt)
+    wt = 0.5 * (1.0 + np.cos(np.pi * ii * 1. / numwt))
+    ii = np.arange(1, numwt)
+    xx = np.pi * 2 * haf * ii
+    wt[1:numwt + 1] = wt[1:numwt + 1] * np.sin(xx) / xx
+    summ = wt[1:numwt + 1].sum()
+    xx = wt.sum() + summ
+    wt /= xx
+    return np.r_[wt[::-1], wt[1:numwt + 1]]
+
 
 
 def read_csv_file(filename):
@@ -89,8 +112,10 @@ def one_hot_encode(x):
         return [0 , 0 , 1]
 
 def read_rainfall():
-    data = read_csv_file('../Data/Rainfall/daily_rainfall_central_India_1948_2014.csv')
+    data = read_csv_file('../Data/Rainfall/normalized_daily_rainfall_central_India_1948_2014.csv')
     rainfall = []
+
+    months=[]
 
     """Creating list of rainfall data"""
     for row in (data):
@@ -100,12 +125,32 @@ def read_rainfall():
 
 
 
-    l = len(rainfall) - NUM_STEPS - LEAD_TIME
-    size = int(int(l*(1 - TRAIN_TEST_RATIO))*(1-TRAIN_VALIDATION_RATIO))
-    print("size" ,size)  #Training set size
+    for row in (data):
+        days = 0
+        for col in row:
 
-    rainfall = normalise_list(rainfall , size)
-    return rainfall , size
+            days+=1
+            if(days<=30):
+                months.append(0)
+
+            elif(days<=61):
+                months.append(1)
+
+            elif(days<=92):
+                months.append(2)
+
+            else:
+                months.append(3)
+
+
+    l = len(rainfall) - NUM_STEPS - LEAD_TIME
+    #print("l",l)
+    size = l - int(l*TRAIN_TEST_RATIO)
+    #print("size" ,size)  #Training set size
+    #rainfall = normalise_list(rainfall , size)
+    wt = lanc(window_size, freq)
+    rainfall = np.convolve(wt, rainfall, mode='same')
+    return rainfall , months , size
 
 
 def read_rainfall_class():
@@ -139,7 +184,6 @@ def read_rainfall_class():
 
     #rainfall = normalise_list(rainfall)
     return rainfall
-
 
 
 def filename(f):
@@ -237,7 +281,7 @@ def read_at(fileNum , size):
 
 def read_pres(fileNum,size):
 
-    base = "../Data/SLP/daily_pres"
+    base = "../Data/SLP/daily_slp"
     middle = filename(fileNum)
     end = "1948_2014.csv"
 
@@ -335,6 +379,7 @@ def split_data(input1 , input2 , input3 , input4 , input5 , output , size):
 
     """
     new_size=0
+    print("seq",len(sequence))
     for i in range(len(sequence) - NUM_STEPS - LEAD_TIME):
 
         temp1 = np.array(sequence[i: i + NUM_STEPS])
@@ -346,8 +391,6 @@ def split_data(input1 , input2 , input3 , input4 , input5 , output , size):
 
         for j in range(LEAD_TIME):
             z.append(output[i+NUM_STEPS+j])
-
-
         y.append(z)
 
 
@@ -358,12 +401,13 @@ def split_data(input1 , input2 , input3 , input4 , input5 , output , size):
 
 
 
-def train_test_split(X , y ,size):
+def train_test_split(X , y):
 
     """
     Splitting data into training and test data"
     """
 
+    size = X.shape[0]
     test_size = int(size * TRAIN_TEST_RATIO)
 
     X_test = X[-test_size:]
@@ -372,17 +416,7 @@ def train_test_split(X , y ,size):
     X_train = X[:-test_size]
     y_train =  y[:-test_size]
 
-    size = size - test_size
-
-    validation_size = int(size * TRAIN_VALIDATION_RATIO)
-
-    X_validation = X_train[-validation_size:]
-    y_validation = y_train[-validation_size:]
-
-    X_train = X_train[:-validation_size]
-    y_train =  y_train[:-validation_size]
-
-    return X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size
+    return X_train , y_train , X_test , y_test , test_size
 
 
 def process():
@@ -391,7 +425,7 @@ def process():
     Reading variables
 
     """
-    rainfall, size = read_rainfall()
+    rainfall, month , size = read_rainfall()
 
     #plt.plot(rainfall)
     #plt.show()
@@ -401,32 +435,33 @@ def process():
     uwindSI = read_uwind(3,size)
     uwindAS = read_uwind(4,size)
 
-    uwind = [uwindCI]
+    uwind = []
 
     vwindCI = read_vwind(1,size)
     vwindSI = read_vwind(2,size)
     vwindAS = read_vwind(3,size)
     vwindBOB = read_vwind(4,size)
 
-    vwind = [vwindCI]
+    vwind = []
 
     atCI = read_at(1,size)
     atSI = read_at(2,size)
     atAS = read_at(3,size)
     atBOB = read_at(4,size)
 
-    at = [atCI,atSI,atBOB,atAS]
+    at = [atCI,atAS,atBOB,atAS]
 
     presCI = read_pres(1,size)
     presSI = read_pres(2,size)
     presAS = read_pres(3,size)
     presBOB = read_pres(4,size)
 
+    pres=[presCI,presSI]
 
-    pres = [presCI,presSI]
+    months = []
     rainfall_class = read_rainfall_class()
 
-    X,y,new_size = split_data(rainfall,uwind , vwind , at , pres , rainfall_class , size)
+    X,y,new_size = split_data(rainfall,pres , months , at ,vwind, rainfall_class , size)
 
 
     y = np.reshape(y , [y.shape[0] , LEAD_TIME , 3])
@@ -435,35 +470,21 @@ def process():
     print(X.shape)
     print(y.shape)
 
-
-    print("size" , size)
-    X_train , y_train , X_validation , y_validation , X_test , y_test , test_size , validation_size = train_test_split(X,y,size)
+    X_train , y_train , X_test , y_test , test_size  = train_test_split(X,y)
 
 
     print(X_train.shape)
     print(y_train.shape)
 
-    print(X_validation.shape)
-    print(y_validation.shape)
-
     print(X_test.shape)
     print(y_test.shape)
 
+    """
+    Data split into train and test
 
     """
-    Data split into train validation and test
 
-    """
-
-    print(X[0])
-    print(y[0])
-
-    print(X[1])
-    print(y[1])
-
-    print(y[2:30])
-
-    return X_train , y_train , X_validation , y_validation , X_test , y_test
+    return X_train , y_train , X_test , y_test
 
 
 
