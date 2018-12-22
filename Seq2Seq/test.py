@@ -1,4 +1,3 @@
-
 import tensorflow as tf
 import numpy as np
 
@@ -14,13 +13,25 @@ from tensorflow.python.framework import dtypes
 import copy
 
 from sklearn.metrics import f1_score
-X_train , y_train ,  X_test , y_test = l.process()
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
 
 
-ratio = [1.4,1,1.4]
+X_train , y_train ,  X_test , y_test , ratio = l.process()
+
+
+ratio = [1,1,1]
 ratio = np.reshape(ratio , [-1,1])
 
 batch_size = len(y_test)
+
+def write_list_to_file(list, filename):
+    """Write the list to csv file."""
+
+    with open(filename, "w") as outfile:
+        for entries in list:
+            outfile.write(str(entries))
+            outfile.write("\n")
 
 
 class RNNConfig():
@@ -34,7 +45,7 @@ class RNNConfig():
     output_seq_len = l.LEAD_TIME
 
     # size of LSTM Cell
-    hidden_dim = 80
+    hidden_dim = 30
 
     # num of input signals
     input_dim = l.INPUTS
@@ -45,7 +56,7 @@ class RNNConfig():
     # num of stacked lstm layers
     num_stacked_layers = 1
 
-    alpha = 0.5 #Loss parameter
+    alpha = 1 #Loss parameter
 
 
 
@@ -67,34 +78,44 @@ def create_placeholders():
 
 
 def weight_variable(shape):
-    return tf.get_variable("proj_w_out",
-    [config.hidden_dim, config.output_dim],dtype=tf.float32,initializer=tf.random_uniform_initializer(minval=-0.04, maxval=0.04))
+    return (tf.Variable(tf.truncated_normal(shape=shape , stddev=0.1)))
 
 def bias_variable(shape):
-    return tf.get_variable("proj_b_out",
-        [config.output_dim],dtype=tf.float32,initializer=tf.random_uniform_initializer(minval=-0.04, maxval=0.04))
+    return tf.Variable(tf.constant(0., shape=shape))
 
-def create_network():
+def encoder_network():
     cells = []
+    for i in range(config.num_stacked_layers):
 
-    cell = tf.contrib.rnn.LSTMCell(config.hidden_dim)
-    cells.append(cell)
-
-    for j in range(config.num_stacked_layers-1):
-        cell = tf.contrib.rnn.LSTMCell(config.hidden_dim)
-        #cell = tf.contrib.rnn.ResidualWrapper(cell)
-        cells.append(cell)
+        lstm_cell = tf.contrib.rnn.LSTMCell(config.hidden_dim)
+        cells.append(lstm_cell)
 
     cell = tf.contrib.rnn.MultiRNNCell(cells)
 
     return cell
 
+def decoder_network(attention_mechanism):
 
-def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=None,scope=None):
+    lstm_cell = tf.contrib.rnn.LSTMCell(config.hidden_dim)
 
-    state = initial_state
+    decoder_cell = tf.contrib.seq2seq.AttentionWrapper(
+        lstm_cell, attention_mechanism=attention_mechanism,
+        attention_layer_size=config.hidden_dim)
+
+
+    return decoder_cell
+
+
+def _rnn_decoder(decoder_inputs,initial_state, attention_mechanism , Why , by , loop_function=None,scope=None):
+
     outputs = []
     prev = None
+
+    cell = decoder_network(attention_mechanism)
+
+    state = cell.zero_state(batch_size=batch_size,dtype=tf.float32).clone(cell_state=initial_state[0])
+
+    print("Outputs",outputs)
 
     for i, inp in enumerate(decoder_inputs):
 
@@ -104,7 +125,7 @@ def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=Non
         if i > 0:
             variable_scope.get_variable_scope().reuse_variables()
 
-        output, state = cell(inp, state)
+        output,state = cell(inp, state=state)
         outputs.append(output)
 
 
@@ -112,16 +133,23 @@ def _rnn_decoder(decoder_inputs,initial_state,cell, Why , by , loop_function=Non
             prev = output
 
     return outputs, state
-
 def _basic_rnn_seq2seq(encoder_inputs,decoder_inputs,cell,Why , by , feed_previous, dtype=dtypes.float32,scope=None):
 
     enc_cell = copy.deepcopy(cell)
-
     outputs, enc_state = rnn.static_rnn(enc_cell, encoder_inputs, dtype=dtype)
+
+    enc_outputs = tf.stack(outputs)
+
+    attention_states = tf.transpose(enc_outputs, [1, 0, 2])
+
+    attention_mechanism = tf.contrib.seq2seq.LuongAttention(
+                            num_units=config.hidden_dim, memory =attention_states)
+
     if feed_previous:
-        return _rnn_decoder(decoder_inputs, enc_state, cell, Why , by ,_loop_function)
+        return _rnn_decoder(decoder_inputs, enc_state, attention_mechanism , Why , by ,_loop_function)
     else:
-        return _rnn_decoder(decoder_inputs, enc_state, cell , Why , by)
+        return _rnn_decoder(decoder_inputs, enc_state , attention_mechanism , Why , by)
+
 
 def reshape(dec_outputs , Why , by):
 
@@ -131,12 +159,14 @@ def reshape(dec_outputs , Why , by):
 
         print("j",j)
         i = dec_outputs[j]
-        temp = tf.matmul(i,Why)+by
+
+        temp = (tf.add(tf.matmul(i , Why),by))
         reshaped_outputs.append(temp)
 
         last_outputs = temp
 
     return reshaped_outputs , last_outputs
+
 
 def compute_loss(reshaped_outputs , last_outputs,target_seq):
 
@@ -156,25 +186,26 @@ def compute_loss(reshaped_outputs , last_outputs,target_seq):
         for y , Y in zip(reshaped_outputs , target_seq):
             weight_per_label = tf.transpose(tf.matmul(Y,class_weight))
             all_steps_cost += tf.reduce_mean(tf.multiply(weight_per_label,tf.nn.softmax_cross_entropy_with_logits(labels=Y,logits=y)))
-            last_step_cost = tf.reduce_mean(tf.multiply(weight_per_label,tf.nn.softmax_cross_entropy_with_logits(labels=Y,logits=y)))
+
+
+            if(Y==target_seq[-1]):
+                weight_per_label = tf.transpose(tf.matmul(Y,class_weight))
+                last_step_cost = tf.reduce_mean(tf.multiply(weight_per_label,tf.nn.softmax_cross_entropy_with_logits(labels=Y,logits=y)))
 
 
         output_loss = config.alpha * all_steps_cost + (1-config.alpha) * last_step_cost
 
         return output_loss
 
-
-
 def _loop_function(prev, Why , by):
 
-    print("prev",prev)
-    temp = tf.add(tf.matmul(prev,Why),by)
+    temp= tf.nn.softmax(tf.matmul(prev, Why) + by)
     one_hot = tf.one_hot(tf.argmax(temp, dimension = 1), depth = 3)
-
     return one_hot
 
 
-def build_graph(feed_previous = False):
+
+def build_graph(feed_previous = True):
 
     print("Building graph")
     tf.reset_default_graph()
@@ -186,11 +217,10 @@ def build_graph(feed_previous = False):
     by = bias_variable([config.output_dim])
     print("Weights initialised")
 
-
     enc_inp , target_seq , dec_inp = create_placeholders()
     print("Placeholders created")
 
-    cell = create_network()
+    cell = encoder_network()
     print("Network created")
 
     dec_outputs, dec_memory = _basic_rnn_seq2seq(enc_inp, dec_inp, cell, Why , by , feed_previous=feed_previous)
@@ -213,7 +243,9 @@ def test():
     rnn_model = build_graph(feed_previous=True)
     saver = tf.train.Saver()
     init = tf.global_variables_initializer()
-    with tf.Session() as sess:
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
+
+    with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
 
         sess.run(init)
 
@@ -227,7 +259,7 @@ def test():
 
 
         global y_validation
-        feed_dict = {rnn_model['enc_inp'][t]: X_test[:, t] for t in range(config.input_seq_len)} # batch prediction
+        feed_dict = {rnn_model['enc_inp'][t]: X_test[:, t, :] for t in range(config.input_seq_len)} # batch prediction
         feed_dict.update({rnn_model['target_seq'][t]: y_test[:,t] for t in range(config.output_seq_len)})
         final_preds = sess.run(rnn_model['reshaped_outputs'], feed_dict)
 
@@ -237,67 +269,32 @@ def test():
 
         loss = sess.run(rnn_model['loss'] , feed_dict)
 
-        fig = plt.figure()
-        fig.subplots_adjust(bottom=0.2)
-
-        ax1 = fig.add_subplot(111)
         preds=[]
         act=[]
+
+        updated_pred = []
+        updated_act = []
 
 
         for pred in final_preds:
             preds.append(pred[-1])
 
 
+
         for a in y_test:
             act.append(a[-1])
 
 
-        for a , b in zip(preds , act):
-            print("Predicted   %d " , a),
-            print("Actual  %d" , b)
+        for i in range(len(preds)):
+            if((i+1)%122 > 30 and (i+1)%122 < 93 ):
+                updated_pred.append(np.argmax(preds[i]))
+
+        write_list_to_file(updated_pred, "Predictions.csv")
 
         for i in range(len(preds)):
-            preds[i] = np.argmax(preds[i])
+            if((i+1)%122 > 30 and (i+1)%122 < 93 ):
+                updated_act.append(np.argmax(act[i]))
+        write_list_to_file(updated_act, "Actual.csv")
 
-        for i in range(len(preds)):
-            act[i] = np.argmax(act[i])
-
-
-        acc=0
-        count=0
-
-        for i in range(len(preds)):
-            if(act[i]!=1):
-                count+=1
-                if(preds[i]==act[i]):
-                    acc+=1
-
-        print("Active/dry spell accuracy")
-        print(float(acc)/count)*100
-
-
-        acc=0
-        count=0
-        for i in range(1,len(preds)):
-            if(1):
-                count+=1
-                if(preds[i]==act[i]):
-                    acc+=1
-
-        print("Total accuracy")
-        print(float(acc)/count)*100
-
-        print("F1 score" , f1_score(preds, act, average='weighted'))
-
-        print("validation_loss" , loss)
-
-        line1 = ax1.plot(preds,'bo-',label='list 1')
-        line2 = ax1.plot(act,'go-',label='list 2')
-
-        # Display the figure
-        plt.show()
-
-
-
-test()
+if __name__ == '__main__':
+    test()        

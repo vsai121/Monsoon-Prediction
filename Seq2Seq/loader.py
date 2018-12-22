@@ -13,15 +13,15 @@ import random
 #Parameters for splitting data
 
 
-NUM_STEPS = 8 #DAYS USED TO MAKE PREDICTION
-LEAD_TIME = 3 # PREDICITNG LEAD_TIME DAYS AHEAD
+NUM_STEPS = 7 #DAYS USED TO MAKE PREDICTION
+LEAD_TIME = 2 # PREDICITNG LEAD_TIME DAYS AHEAD
 
 TRAIN_TEST_RATIO = 0.1
 
-INPUTS= 7 #Number of Variables used
+INPUTS= 5 #Number of Variables used
 
-freq = 1./5  # Hours
-window_size = 51
+freq = 1./4  # Hours
+window_size = 25
 pad = np.zeros(window_size) * np.NaN
 
 def lanc(numwt, haf):
@@ -115,7 +115,6 @@ def read_rainfall():
     data = read_csv_file('../Data/Rainfall/normalized_daily_rainfall_central_India_1948_2014.csv')
     rainfall = []
 
-    months=[]
 
     """Creating list of rainfall data"""
     for row in (data):
@@ -124,33 +123,15 @@ def read_rainfall():
             rainfall.append(float(col))
 
 
-
-    for row in (data):
-        days = 0
-        for col in row:
-
-            days+=1
-            if(days<=30):
-                months.append(0)
-
-            elif(days<=61):
-                months.append(1)
-
-            elif(days<=92):
-                months.append(2)
-
-            else:
-                months.append(3)
-
-
     l = len(rainfall) - NUM_STEPS - LEAD_TIME
-    #print("l",l)
     size = l - int(l*TRAIN_TEST_RATIO)
     #print("size" ,size)  #Training set size
-    #rainfall = normalise_list(rainfall , size)
+    rainfall = normalise_list(rainfall,size)
+
     wt = lanc(window_size, freq)
     rainfall = np.convolve(wt, rainfall, mode='same')
-    return rainfall , months , size
+
+    return rainfall, size
 
 
 def read_rainfall_class():
@@ -158,6 +139,7 @@ def read_rainfall_class():
     """
         Reading class of rainfall
     """
+    ratio = [0.,0.,0.]
     data = read_csv_file('../Data/Rainfall/class4_daily_rainfall_central_India_1948_2014.csv')
     rainfall = []
 
@@ -169,21 +151,38 @@ def read_rainfall_class():
 
     for i in range(1,len(rainfall)-1):
 
-        if(rainfall[i-1]==1 and rainfall[i+1]==1):
-            rainfall[i]=1
 
         if(rainfall[i-1]==2 and rainfall[i+1]==2):
             rainfall[i]=2
 
-        if(rainfall[i-1]==0 and rainfall[i+1]==0):
+        elif(rainfall[i-1]==0 and rainfall[i+1]==0):
             rainfall[i]=0
 
+    for i in range(1,len(rainfall)-1):
+        if(rainfall[i-1]==1 and rainfall[i+1]==1):
+            rainfall[i]=1
 
+    zeros=0
+    ones=0
+    twos=0
     for i in range(len(rainfall)):
+        if(rainfall[i]==0):
+            zeros+=1
+
+        if(rainfall[i]==1):
+            ones+=1
+
+        if(rainfall[i]==2):
+            twos+=1
+
         rainfall[i] = one_hot_encode(rainfall[i])
 
-    #rainfall = normalise_list(rainfall)
-    return rainfall
+    total = zeros + ones + twos
+    ratio[0] = float(ones+twos)/total
+    ratio[1] = float(zeros+twos)/total
+    ratio[2] = float(zeros+ones)/total
+
+    return rainfall,ratio
 
 
 def filename(f):
@@ -408,7 +407,7 @@ def train_test_split(X , y):
     """
 
     size = X.shape[0]
-    test_size = int(size * TRAIN_TEST_RATIO)
+    test_size = 853
 
     X_test = X[-test_size:]
     y_test = y[-test_size:]
@@ -425,66 +424,41 @@ def process():
     Reading variables
 
     """
-    rainfall, month , size = read_rainfall()
-
-    #plt.plot(rainfall)
-    #plt.show()
+    rainfall,size = read_rainfall()
 
     uwindCI = read_uwind(1,size)
-    uwindBOB = read_uwind(2,size)
-    uwindSI = read_uwind(3,size)
-    uwindAS = read_uwind(4,size)
-
-    uwind = []
+    uwind = [uwindCI]
 
     vwindCI = read_vwind(1,size)
-    vwindSI = read_vwind(2,size)
-    vwindAS = read_vwind(3,size)
-    vwindBOB = read_vwind(4,size)
-
-    vwind = []
+    vwind = [vwindCI]
 
     atCI = read_at(1,size)
-    atSI = read_at(2,size)
-    atAS = read_at(3,size)
-    atBOB = read_at(4,size)
-
-    at = [atCI,atAS,atBOB,atAS]
+    at = [atCI,]
 
     presCI = read_pres(1,size)
-    presSI = read_pres(2,size)
-    presAS = read_pres(3,size)
-    presBOB = read_pres(4,size)
-
-    pres=[presCI,presSI]
+    pres=[presCI,]
 
     months = []
-    rainfall_class = read_rainfall_class()
+    rainfall_class , ratio  = read_rainfall_class()
 
-    X,y,new_size = split_data(rainfall,pres , months , at ,vwind, rainfall_class , size)
+    X,y,new_size = split_data(rainfall,pres , uwind , at ,vwind, rainfall_class , size)
 
 
     y = np.reshape(y , [y.shape[0] , LEAD_TIME , 3])
     X = np.reshape(X , [X.shape[0] , X.shape[1] , INPUTS])
 
-    print(X.shape)
-    print(y.shape)
 
     X_train , y_train , X_test , y_test , test_size  = train_test_split(X,y)
 
-
-    print(X_train.shape)
-    print(y_train.shape)
-
-    print(X_test.shape)
-    print(y_test.shape)
 
     """
     Data split into train and test
 
     """
 
-    return X_train , y_train , X_test , y_test
+    print("Training size", len(X_train))
+    print("Test size", len(X_test))
+    return X_train , y_train , X_test , y_test , ratio
 
 
 
